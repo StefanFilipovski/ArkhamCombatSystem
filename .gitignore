@@ -1,0 +1,28 @@
+# Unreal generated folders - rebuilt locally
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+Plugins/**/Binaries/
+Plugins/**/Intermediate/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.sln
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+*.vcxproj.user
+
+# Build output
+*.pdb
+*.obj
+*.exe
+*.dll
+
+# OS
+Thumbs.db
+.DS_Store
