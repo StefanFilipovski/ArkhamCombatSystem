@@ -54,6 +54,16 @@ Rules the code follows:
 - The material turns that into: colour `StartColor → EndColor`, flash rate `FlashRateStart → FlashRateEnd`
   (flashes per second, via Time → Sine), brightness `MinIntensity → MaxIntensity` on each flash.
 
+**`Content/Characters/Enemies/BP_EnemySpawner`** → *Class Defaults* → Encounter
+- `Enemy Class` (BP_EnemyCharacter) and the encounter rules: `Initial Enemies`, `Max Alive Enemies`,
+  `Total Enemies`, `Defeats Per Extra Enemy`, `Respawn Delay`, `Min Spawn Distance`, `Restart Delay After Complete`
+- The Blueprint's graph listens to `On Encounter Complete` and shows the end-of-demo message
+
+**The spawner placed in `Lvl_ThirdPerson`** → *Details* → Encounter
+- `Spawn Points`: the **Target Point** actors around the arena edge that enemies run in from.
+  Leave empty to use random spots on the nav mesh within `Fallback Spawn Radius` of the spawner.
+- Numbers can be overridden per level here, the Blueprint holds the defaults.
+
 **Montages** (open one, check the *Asset Details* panel): `Blend In` / `Blend Out` / `Enable Auto Blend Out`
 - Enemy: `Content/Characters/Enemies/Animations/AM_Enemy*`
 - Player: `Content/Characters/Player/PlayerAnimations/AM_Player*` — `AM_PlayerDeath` has auto blend out **off** so the player stays down
@@ -71,7 +81,10 @@ APlayerCharacter ──input──► UCombatComponent ──hits──► AEnem
                                    │ IsEngaging()                ▲
                                    │                             │ StartAttack()
 AArkhamGameMode ── owns ──► UEnemyManagerComponent ──────────────┘
-                              (surround slots, attack pacing)
+                              (surround slots, attack pacing)       ▲
+                                                                    │ SpawnActor, OnDied
+AEnemySpawner (placed in level) ────────────────────────────────────┘
+  (keeps the crowd topped up, counts defeats, ends the demo)
 
 StrikeAnalysis (shared) ── reads bone data from animations for both sides
 ```
@@ -83,6 +96,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `UCombatComponent` | `Combat/CombatComponent.*` | Everything the player does in a fight |
 | `AEnemyCharacter` | `Characters/EnemyCharacter.*` | Hit reactions, knockback, attacking, being countered, attack indicator |
 | `UEnemyManagerComponent` | `AI/EnemyManagerComponent.*` | On the game mode; surround positions and who attacks when |
+| `AEnemySpawner` | `AI/EnemySpawner.*` | Placed in the level; spawns enemies at its spawn points, counts defeats, ends the encounter |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
 
@@ -139,6 +153,17 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 |---|---|
 | Surround slots + separation | `CalculateSurroundPositions`, `CalculateSeparationForce`, `UpdateEnemyPositions` |
 | Attack pacing scaled by enemy count, attacker slots, skip the enemy you're hitting | `UpdateAttacks` |
+
+### Enemy spawning and the end of the demo (`AI/EnemySpawner.cpp`)
+| Feature | Function(s) |
+|---|---|
+| Starting crowd (one tick after BeginPlay, once the player exists) | `SpawnInitialEnemies` |
+| Crowd size: `InitialEnemies`, +1 every `DefeatsPerExtraEnemy` defeats, capped at `MaxAliveEnemies` | `GetDesiredAliveCount` |
+| Replacements after a defeat, one at a time with `RespawnDelay` | `QueueSpawns`, `SpawnQueuedEnemy` |
+| Spawn point choice: free, at least `MinSpawnDistance` from the player, off-screen if possible, not the same one twice | `PickSpawnPoint` (nav mesh fallback: `PickNavigableLocation`) |
+| Counting defeats (via the `OnDied` event every character fires in `AArkhamCharacterBase::Die`) | `HandleEnemyDied`, `RegisterDefeat` |
+| Demo end: `OnEncounterComplete` for the Blueprint/UI, then level restart | `CompleteEncounter`, `RestartLevel` |
+| Final-blow slow-mo only on the encounter's last enemy, not whenever the arena is briefly empty | `UCombatComponent::IsLastEnemyStanding` asks `IsEncounterComplete` |
 
 ### Player being hit (`Combat/CombatComponent.cpp` + `Characters/PlayerCharacter.cpp`)
 | Feature | Function(s) |
@@ -198,3 +223,4 @@ Original source backup: `C:\Portfolio\Projects\ArkhamCombat_Source_Backup_2026-0
 | `DA_*` Attack Data assets | Hit, Feel | `Damage`, `KnockdownChance`, `KnockbackScale`, `HitPauseDuration`, `CameraShakeScale` — per attack |
 | `BP_EnemyCharacter` | Combat\|Attack, Indicator, Knockback | `CounterWindow`, `AttackLockoutAfterHit`, `bIndicatorOnStrikingHand`, `HitKnockbackDistance` |
 | `BP_ArkhamGameMode` | EnemyManager → AI\|Attacks | `SoloAttackInterval`, `CrowdAttackInterval`, `EnemiesPerAttacker`, `bEnemiesAttack` |
+| `BP_EnemySpawner` (or the placed instance) | Encounter | `InitialEnemies`, `MaxAliveEnemies`, `TotalEnemies`, `DefeatsPerExtraEnemy`, `RespawnDelay`, `MinSpawnDistance` |

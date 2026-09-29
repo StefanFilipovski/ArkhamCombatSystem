@@ -4,6 +4,7 @@
 #include "Combat/AnimNotifyState_HitWindow.h"
 #include "Characters/ArkhamCharacterBase.h"
 #include "Characters/EnemyCharacter.h"
+#include "AI/EnemySpawner.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -811,6 +812,12 @@ void UCombatComponent::PlayHitImpact(const FVector& ImpactPoint, float ShakeScal
 
 bool UCombatComponent::IsLastEnemyStanding(const AActor* Victim) const
 {
+    // More enemies still on the way - this isn't the end of the fight
+    for (TActorIterator<AEnemySpawner> It(GetWorld()); It; ++It)
+    {
+        if (!It->IsEncounterComplete()) return false;
+    }
+
     for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
     {
         if (*It != Victim && !It->IsDead()) return false;

@@ -4,6 +4,10 @@
 #include "Combat/AttackData.h"
 #include "ArkhamCharacterBase.generated.h"
 
+class AArkhamCharacterBase;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AArkhamCharacterBase*, Character);
+
 UCLASS()
 class ARKHAMCOMBAT_API AArkhamCharacterBase : public ACharacter
 {
@@ -35,6 +39,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Combat")
     virtual void Die();
+
+    UPROPERTY(BlueprintAssignable, Category = "Combat")
+    FOnCharacterDied OnDied;
 
     // --- Getters ---
     UFUNCTION(BlueprintPure, Category = "Combat")

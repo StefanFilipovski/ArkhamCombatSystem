@@ -43,4 +43,6 @@ void AArkhamCharacterBase::Die()
 
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetCharacterMovement()->DisableMovement();
+
+    OnDied.Broadcast(this);
 }

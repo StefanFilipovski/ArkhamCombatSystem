@@ -11,6 +11,7 @@ A melee combat system inspired by the Batman: Arkham series, built in C++ with U
 - **Data-driven attacks** – every attack (player combo, flashy kicks, counter, enemy punches) is an `AttackData` asset
 - **Counters** – enemies telegraph with a flashing ring; countering plays a paired animation on both characters
 - **Enemy coordination** – surround positions and attack pacing that scales with the number of enemies
+- **Encounter spawner** – a growing crowd of enemies runs in from off-screen until the demo's quota is beaten
 - **Game feel** – hit-stop, camera shake, knockback, and slow motion on the final blow
 
 ## Project layout
