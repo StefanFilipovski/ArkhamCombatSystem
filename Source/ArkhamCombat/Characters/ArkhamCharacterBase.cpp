@@ -1,16 +1,60 @@
 #include "Characters/ArkhamCharacterBase.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Materials/MaterialInterface.h"
 
 AArkhamCharacterBase::AArkhamCharacterBase()
 {
     PrimaryActorTick.bCanEverTick = true;
+
+    VisualMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("VisualMesh"));
+    VisualMesh->SetupAttachment(GetMesh());
+    VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    VisualMesh->SetGenerateOverlapEvents(false);
+}
+
+void AArkhamCharacterBase::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+
+    // Swap which mesh is drawn - also in the Blueprint viewport, so the editor shows what the game will
+    const bool bHasVisualMesh = VisualMesh->GetSkeletalMeshAsset() != nullptr;
+    GetMesh()->SetVisibility(!bHasVisualMesh, false);
+    VisualMesh->SetVisibility(bHasVisualMesh, false);
+
+    // Hidden meshes skip animation by default, but the combat code and the visible model both need its pose
+    if (bHasVisualMesh)
+    {
+        GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    }
 }
 
 void AArkhamCharacterBase::BeginPlay()
 {
     Super::BeginPlay();
     CurrentHealth = MaxHealth;
+
+    // Copy the pose only after it has been updated this frame
+    VisualMesh->AddTickPrerequisiteComponent(GetMesh());
+
+    if (!Looks.IsEmpty())
+    {
+        const FCharacterLook& Look = Looks[FMath::RandRange(0, Looks.Num() - 1)];
+        USkeletalMeshComponent* Visible = GetVisibleMesh();
+        for (int32 Slot = 0; Slot < Look.Materials.Num(); ++Slot)
+        {
+            if (Look.Materials[Slot])
+            {
+                Visible->SetMaterial(Slot, Look.Materials[Slot]);
+            }
+        }
+    }
+}
+
+USkeletalMeshComponent* AArkhamCharacterBase::GetVisibleMesh() const
+{
+    return VisualMesh->GetSkeletalMeshAsset() ? VisualMesh.Get() : GetMesh();
 }
 
 void AArkhamCharacterBase::Tick(float DeltaTime)

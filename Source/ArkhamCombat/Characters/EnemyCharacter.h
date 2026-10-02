@@ -159,6 +159,9 @@ public:
     void OnDeathAnimationEnd();
     void SetAssignedPosition(FVector NewPosition);
 
+    // Enemies only exist to fight - always in a guard stance
+    virtual bool IsInCombat() const override { return !bIsDead; }
+
     // --- Getters ---
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsTelegraphing() const { return bIsTelegraphing; }

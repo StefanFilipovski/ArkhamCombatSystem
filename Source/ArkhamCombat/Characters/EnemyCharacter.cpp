@@ -43,7 +43,7 @@ void AEnemyCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
-    GetMesh()->SetOverlayMaterial(nullptr);
+    GetVisibleMesh()->SetOverlayMaterial(nullptr);
 
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
     GetMesh()->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
@@ -372,13 +372,13 @@ void AEnemyCharacter::ShowOutline()
 {
     if (OutlineMaterial)
     {
-        GetMesh()->SetOverlayMaterial(OutlineMaterial);
+        GetVisibleMesh()->SetOverlayMaterial(OutlineMaterial);
     }
 }
 
 void AEnemyCharacter::HideOutline()
 {
-    GetMesh()->SetOverlayMaterial(nullptr);
+    GetVisibleMesh()->SetOverlayMaterial(nullptr);
 }
 
 void AEnemyCharacter::OnDeathAnimationEnd()
@@ -552,6 +552,12 @@ void AEnemyCharacter::ResolveAttackContact()
     if (bInReach && bFacing)
     {
         Victim->TakeCombatHit(CurrentAttack->Hit, this);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("%s punch missed: distance %.0f (reach %.0f), facing %.2f (needs 0.5)"), *GetName(),
+            ToVictim.Size(), AttackStrikeDistance + AttackReachTolerance,
+            FVector::DotProduct(GetActorForwardVector(), ToVictim.GetSafeNormal()));
     }
 }
 

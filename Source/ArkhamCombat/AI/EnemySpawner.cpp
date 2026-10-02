@@ -24,6 +24,14 @@ void AEnemySpawner::BeginPlay()
         return;
     }
 
+    // Links to actors in another level are dropped on copy-paste, leaving empty entries behind
+    const int32 EmptyPoints = SpawnPoints.RemoveAll([](const TObjectPtr<AActor>& Point) { return !IsValid(Point); });
+    if (EmptyPoints > 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("%s has %d empty spawn points - reassign them in the level%s"), *GetName(), EmptyPoints,
+            SpawnPoints.IsEmpty() ? TEXT(". Using random nav mesh spots for now.") : TEXT(""));
+    }
+
     // The player pawn may not be spawned yet, and spawn points are picked relative to it
     GetWorldTimerManager().SetTimerForNextTick(this, &AEnemySpawner::SpawnInitialEnemies);
 }

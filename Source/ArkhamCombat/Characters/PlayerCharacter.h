@@ -136,8 +136,8 @@ public:
     virtual void TakeCombatHit(const FCombatHit& Hit, AActor* DamageInstigator) override;
     virtual void Die() override;
 
-    UFUNCTION(BlueprintPure, Category = "Combat")
-    bool IsInCombat() const { return bInCombat; }
+    // Enemies close by
+    virtual bool IsInCombat() const override { return bInCombat; }
 
 private:
     // RealDeltaTime ignores hit pause and slow-mo so the camera stays smooth through them

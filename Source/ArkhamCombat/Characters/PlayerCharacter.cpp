@@ -161,7 +161,11 @@ void APlayerCharacter::Counter()
 void APlayerCharacter::TakeCombatHit(const FCombatHit& Hit, AActor* DamageInstigator)
 {
     if (bIsDead) return;
-    if (CombatComponent && CombatComponent->IsInvulnerable()) return;
+    if (CombatComponent && CombatComponent->IsInvulnerable())
+    {
+        UE_LOG(LogTemp, Log, TEXT("Hit from %s ignored - player is countering"), DamageInstigator ? *DamageInstigator->GetName() : TEXT("?"));
+        return;
+    }
 
     Super::TakeCombatHit(Hit, DamageInstigator);
 

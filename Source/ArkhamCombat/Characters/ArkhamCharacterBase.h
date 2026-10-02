@@ -5,8 +5,19 @@
 #include "ArkhamCharacterBase.generated.h"
 
 class AArkhamCharacterBase;
+class UMaterialInterface;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AArkhamCharacterBase*, Character);
+
+// One set of materials for the visible model, in material slot order
+USTRUCT(BlueprintType)
+struct FCharacterLook
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Appearance")
+    TArray<TObjectPtr<UMaterialInterface>> Materials;
+};
 
 UCLASS()
 class ARKHAMCOMBAT_API AArkhamCharacterBase : public ACharacter
@@ -16,8 +27,23 @@ class ARKHAMCOMBAT_API AArkhamCharacterBase : public ACharacter
 public:
     AArkhamCharacterBase();
 
+    virtual void OnConstruction(const FTransform& Transform) override;
+
+    // The model the player sees. Empty = the main Mesh is shown as before.
+    // When set, the main Mesh keeps running every animation hidden (combat reads its bones) and this one copies its pose,
+    // usually through a Retarget Pose From Mesh anim blueprint.
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Appearance")
+    TObjectPtr<USkeletalMeshComponent> VisualMesh;
+
+    UFUNCTION(BlueprintPure, Category = "Appearance")
+    USkeletalMeshComponent* GetVisibleMesh() const;
+
 protected:
     virtual void BeginPlay() override;
+
+    // One of these is picked at random on spawn. Empty = keep the materials set on the mesh.
+    UPROPERTY(EditDefaultsOnly, Category = "Appearance")
+    TArray<FCharacterLook> Looks;
 
     // --- Health ---
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
@@ -49,4 +75,8 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Combat")
     float GetCurrentHealth() const { return CurrentHealth; }
+
+    // Drives the fists-up stance in the anim blueprint
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    virtual bool IsInCombat() const { return false; }
 };

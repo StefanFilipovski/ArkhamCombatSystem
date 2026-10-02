@@ -74,7 +74,13 @@ void UCombatComponent::BeginPlay()
     // Analyze every attack up front so the first swing doesn't hitch
     if (bAutoDetectStrike)
     {
-        for (const TArray<TObjectPtr<UAttackData>>* List : { &ComboAttacks, &FlashyAttacks })
+        TArray<const TArray<TObjectPtr<UAttackData>>*> Lists = { &ComboAttacks, &FlashyAttacks };
+        for (const FComboChain& Chain : ExtraComboChains)
+        {
+            Lists.Add(&Chain.Attacks);
+        }
+
+        for (const TArray<TObjectPtr<UAttackData>>* List : Lists)
         {
             for (const UAttackData* Attack : *List)
             {
@@ -165,6 +171,15 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
         {
             ActiveAttack.RecoveryElapsed += DeltaTime;
         }
+
+        // Single-press combo: start the next hit right as this section ends. Neighbouring sections share
+        // the frame at the cut, so the new montage instance blends between identical poses and the motion flows on.
+        if (ActiveAttack.bAutoContinue && ActiveAttack.bContactReached &&
+            ActiveAttack.Elapsed >= ActiveAttack.SectionEnd - ActiveAttack.SectionStart - AutoContinueLead)
+        {
+            // StartAttack reads this to know it's continuing the combo
+            StartAttack();
+        }
     }
 
     UpdateTargetHighlight();
@@ -185,8 +200,9 @@ void UCombatComponent::TryAttack()
         break;
 
     case ECombatState::Attacking:
-        // Recovery is cancelable, earlier phases buffer the press until the hit window closes
-        if (AttackPhase == EAttackPhase::Recovery)
+        // Recovery is cancelable, earlier phases buffer the press until the hit window closes.
+        // A single-press combo plays out first - the press waits for its last hit.
+        if (AttackPhase == EAttackPhase::Recovery && !ActiveAttack.bAutoContinue)
         {
             StartAttack();
         }
@@ -225,6 +241,7 @@ void UCombatComponent::SetMovementInput(const FVector& WorldInput)
     {
         if (UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance())
         {
+            UE_LOG(LogTemp, Log, TEXT("Walked out of reaction %s"), *ReactionMontage->GetName());
             AnimInstance->Montage_Stop(0.2f, ReactionMontage.Get());
         }
         ReactionMontage.Reset();
@@ -232,6 +249,7 @@ void UCombatComponent::SetMovementInput(const FVector& WorldInput)
 
     if (bAllowMovementCancel &&
         CombatState == ECombatState::Attacking &&
+        !ActiveAttack.bAutoContinue &&
         AttackPhase == EAttackPhase::Recovery &&
         !bAttackBuffered &&
         ActiveAttack.RecoveryElapsed >= MovementCancelDelay &&
@@ -260,15 +278,27 @@ void UCombatComponent::StartAttack()
     UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
     if (!AnimInstance) return;
 
+    // Inside a single-press combo the hits play as authored: no flashy swaps, no lunging at someone far off,
+    // and a press made during it stays buffered for after its last hit
+    const bool bMidSpecialCombo = CombatState == ECombatState::Attacking && ActiveAttack.bAutoContinue;
+
     GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
-    bAttackBuffered = false;
+    if (!bMidSpecialCombo)
+    {
+        bAttackBuffered = false;
+    }
     ReactionMontage.Reset();
 
     AEnemyCharacter* Target = SelectTarget();
+    if (bMidSpecialCombo && Target &&
+        FVector::Dist2D(OwnerCharacter->GetActorLocation(), Target->GetActorLocation()) > CloseAttackRange)
+    {
+        Target = nullptr;
+    }
     CurrentTarget = Target;
 
     // Nobody to hit - swing toward the stick instead of wherever we happened to face
-    if (!Target && HasRecentMovementInput())
+    if (!Target && !bMidSpecialCombo && HasRecentMovementInput())
     {
         OwnerCharacter->SetActorRotation(FRotator(0.f, MovementInput.Rotation().Yaw, 0.f));
     }
@@ -279,23 +309,30 @@ void UCombatComponent::StartAttack()
 
     // Choose the attack:
     //   new target mid-chain or far away   -> flashy attack, restarts the combo
-    //   otherwise                          -> next attack in ComboAttacks
+    //   otherwise                          -> next attack in the current combo chain
     //   ...and if the last one will kill   -> flashy attack as the finisher
-    ChainIndex %= ComboAttacks.Num();
-    const UAttackData* ComboAttack = ComboAttacks[ChainIndex];
+    if (ChainIndex == 0)
+    {
+        PickComboChain();
+    }
+    const TArray<TObjectPtr<UAttackData>>& Chain = GetActiveChain();
+    ChainIndex %= Chain.Num();
+    const UAttackData* ComboAttack = Chain[ChainIndex];
     const bool bHasFlashy = !FlashyAttacks.IsEmpty();
 
     const bool bSwitchedTarget = bFlashyKickOnTargetSwitch && Target && bChainHasTarget && Target != LastAttackTarget.Get();
     const bool bFarTarget = Target && TargetDistance > CloseAttackRange;
-    const bool bIsComboFinisher = ChainIndex == ComboAttacks.Num() - 1;
+    const bool bIsComboFinisher = ChainIndex == Chain.Num() - 1;
     const bool bFinisherKills = bFlashyKickOnKillingFinisher && Target && ComboAttack &&
         Target->GetCurrentHealth() <= ComboAttack->Hit.Damage;
 
     FActiveAttack NewAttack;
     NewAttack.Target = Target;
-    NewAttack.bIsTransition = bHasFlashy && (bSwitchedTarget || bFarTarget);
+    NewAttack.bIsTransition = !bMidSpecialCombo && bHasFlashy && (bSwitchedTarget || bFarTarget);
     NewAttack.bIsFinisher = !NewAttack.bIsTransition && bIsComboFinisher;
-    NewAttack.bIsFlashy = NewAttack.bIsTransition || (NewAttack.bIsFinisher && bFinisherKills && bHasFlashy);
+    NewAttack.bIsFlashy = NewAttack.bIsTransition ||
+        (!bMidSpecialCombo && !IsActiveChainSinglePress() && NewAttack.bIsFinisher && bFinisherKills && bHasFlashy);
+    NewAttack.bAutoContinue = !NewAttack.bIsFlashy && IsActiveChainSinglePress() && !bIsComboFinisher;
 
     if (NewAttack.bIsFlashy)
     {
@@ -305,12 +342,13 @@ void UCombatComponent::StartAttack()
     else
     {
         NewAttack.Data = ComboAttack;
-        ChainIndex = (ChainIndex + 1) % ComboAttacks.Num();
+        ChainIndex = (ChainIndex + 1) % Chain.Num();
     }
 
     if (!NewAttack.Data || !NewAttack.Data->Montage)
     {
         UE_LOG(LogTemp, Warning, TEXT("CombatComponent: an attack in the list is empty or has no montage"));
+        ActiveAttack.bAutoContinue = false; // let a running special combo end instead of retrying every frame
         return;
     }
 
@@ -366,7 +404,11 @@ void UCombatComponent::StartAttack()
         Strike.RootTravelToContact >= MinWarpRootTravel;
 
     // Playing a new montage interrupts the previous one; its end delegate is ignored via instance ID
-    if (AnimInstance->Montage_Play(Montage, 1.f) <= 0.f) return;
+    if (AnimInstance->Montage_Play(Montage, 1.f) <= 0.f)
+    {
+        ActiveAttack.bAutoContinue = false;
+        return;
+    }
     if (!NewAttack.Section.IsNone())
     {
         AnimInstance->Montage_JumpToSection(NewAttack.Section, Montage);
@@ -418,6 +460,30 @@ FStrikeInfo UCombatComponent::AnalyzeStrike(const UAnimMontage* Montage, FName S
     return Info;
 }
 
+void UCombatComponent::PickComboChain()
+{
+    // Every chain with something in it is a candidate; Combo Attacks is never empty here
+    TArray<int32> Candidates = { 0 };
+    for (int32 i = 0; i < ExtraComboChains.Num(); ++i)
+    {
+        if (!ExtraComboChains[i].Attacks.IsEmpty())
+        {
+            Candidates.Add(i + 1);
+        }
+    }
+    ActiveChain = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+}
+
+const TArray<TObjectPtr<UAttackData>>& UCombatComponent::GetActiveChain() const
+{
+    return ExtraComboChains.IsValidIndex(ActiveChain - 1) ? ExtraComboChains[ActiveChain - 1].Attacks : ComboAttacks;
+}
+
+bool UCombatComponent::IsActiveChainSinglePress() const
+{
+    return ExtraComboChains.IsValidIndex(ActiveChain - 1) && ExtraComboChains[ActiveChain - 1].bPlayOnSinglePress;
+}
+
 const UAttackData* UCombatComponent::PickFlashyAttack()
 {
     if (FlashyAttacks.IsEmpty()) return nullptr;
@@ -454,7 +520,7 @@ void UCombatComponent::CloseHitWindow()
     AttackPhase = EAttackPhase::Recovery;
     ActiveAttack.RecoveryElapsed = 0.f;
 
-    if (bAttackBuffered)
+    if (bAttackBuffered && !ActiveAttack.bAutoContinue)
     {
         StartAttack();
     }
@@ -647,9 +713,9 @@ void UCombatComponent::LockMovement()
     UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement();
     Movement->StopMovementImmediately();
 
-    // Warped attacks need walking so root motion applies; the code-driven approach
-    // disables movement, which also discards the animation's root motion
-    if (ActiveAttack.bUseWarp)
+    // Warped attacks and swings at nobody move with the animation's root motion, which needs walking;
+    // the code-driven approach disables movement, which also discards that root motion
+    if (ActiveAttack.bUseWarp || !ActiveAttack.Target.Get())
     {
         if (Movement->MovementMode == MOVE_None)
         {
@@ -1037,7 +1103,10 @@ void UCombatComponent::PlayReaction(UAnimMontage* Montage)
     if (!AnimInstance || !Montage) return;
 
     // Blend times, slot and auto blend out come from the montage asset
-    AnimInstance->Montage_Play(Montage);
+    if (AnimInstance->Montage_Play(Montage) <= 0.f)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Reaction %s failed to play"), *Montage->GetName());
+    }
     ReactionMontage = Montage;
 }
 
@@ -1062,21 +1131,28 @@ void UCombatComponent::ReceiveHit(AActor* Attacker, const FCombatHit& Hit)
     }
     TriggerHitPause(Attacker, Hit.HitPauseDuration);
 
-    // Face the hit so the reaction plays the right way
-    if (Attacker)
+    // Hit from behind with an animation for it: react where we stand. Otherwise face the hit so the reaction plays the right way.
+    const bool bDead = OwnerCharacter->IsDead();
+    FVector ToAttacker = Attacker ? Attacker->GetActorLocation() - OwnerCharacter->GetActorLocation() : FVector::ZeroVector;
+    ToAttacker.Z = 0.f;
+
+    bool bFromBehind = false;
+    if (!ToAttacker.IsNearlyZero())
     {
-        FVector ToAttacker = Attacker->GetActorLocation() - OwnerCharacter->GetActorLocation();
-        ToAttacker.Z = 0.f;
-        if (!ToAttacker.IsNearlyZero())
+        const bool bHasBehindAnim = bDead ? DeathMontageFromBehind != nullptr : !HitReactMontagesFromBehind.IsEmpty();
+        bFromBehind = bHasBehindAnim && FVector::DotProduct(OwnerCharacter->GetActorForwardVector(), ToAttacker.GetSafeNormal()) <
+            FMath::Cos(FMath::DegreesToRadians(FromBehindAngle));
+
+        if (!bFromBehind)
         {
             OwnerCharacter->SetActorRotation(ToAttacker.Rotation());
         }
     }
 
-    if (OwnerCharacter->IsDead())
+    if (bDead)
     {
         // The death montage has auto blend out off, so it holds the knocked-down pose
-        PlayReaction(DeathMontage);
+        PlayReaction(bFromBehind ? DeathMontageFromBehind : DeathMontage);
         return;
     }
 
@@ -1084,9 +1160,12 @@ void UCombatComponent::ReceiveHit(AActor* Attacker, const FCombatHit& Hit)
     OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
     UnlockMovement();
 
-    if (!HitReactMontages.IsEmpty())
+    const TArray<TObjectPtr<UAnimMontage>>& Reactions = bFromBehind ? HitReactMontagesFromBehind : HitReactMontages;
+    if (!Reactions.IsEmpty())
     {
-        PlayReaction(HitReactMontages[FMath::RandRange(0, HitReactMontages.Num() - 1)]);
+        PlayReaction(Reactions[FMath::RandRange(0, Reactions.Num() - 1)]);
+        UE_LOG(LogTemp, Log, TEXT("Player hit by %s%s, playing %s"), Attacker ? *Attacker->GetName() : TEXT("?"),
+            bFromBehind ? TEXT(" from behind") : TEXT(""), ReactionMontage.IsValid() ? *ReactionMontage->GetName() : TEXT("nothing"));
     }
 
     GetWorld()->GetTimerManager().SetTimer(HitStunTimer, this, &UCombatComponent::EndHitStun, HitStunDuration, false);

@@ -18,6 +18,20 @@ class USoundBase;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFinalBlow, AActor*, Victim);
 
+// One combo, in order - the last attack is its finisher
+USTRUCT(BlueprintType)
+struct FComboChain
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    TArray<TObjectPtr<UAttackData>> Attacks;
+
+    // A special combo: one press plays every attack in the chain, each flowing into the next
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    bool bPlayOnSinglePress = false;
+};
+
 UENUM(BlueprintType)
 enum class ECombatState : uint8
 {
@@ -211,6 +225,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Strike")
     float HitWindowLead = 0.05f;
 
+    // Single-press combos start their next hit this many seconds before the current section ends
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Strike")
+    float AutoContinueLead = 0.03f;
+
     // --- Hit Detection ---
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit")
     float HitboxRadius = 15.f;
@@ -260,6 +278,11 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Attacks")
     TArray<TObjectPtr<UAttackData>> ComboAttacks;
 
+    // More combos. Every new combo picks one at random from Combo Attacks and these.
+    // Sections cut from one multi-hit animation make a chain that flows like the original.
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Attacks")
+    TArray<FComboChain> ExtraComboChains;
+
     // Picked at random to switch targets, lunge to far targets, and as the killing-blow finisher
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Attacks")
     TArray<TObjectPtr<UAttackData>> FlashyAttacks;
@@ -295,9 +318,22 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
     TArray<TObjectPtr<UAnimMontage>> HitReactMontages;
 
+    // Played instead when the hit comes from behind, without turning around first.
+    // Empty = turn to face the attacker and use Hit React Montages.
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
+    TArray<TObjectPtr<UAnimMontage>> HitReactMontagesFromBehind;
+
     // Turn off Enable Auto Blend Out on this montage so the player stays down
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
     TObjectPtr<UAnimMontage> DeathMontage;
+
+    // Killing blow from behind. Empty = turn around and use Death Montage. Auto Blend Out off here too.
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
+    TObjectPtr<UAnimMontage> DeathMontageFromBehind;
+
+    // Attackers more than this many degrees away from where the player faces count as behind
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions", meta = (ClampMin = "90", ClampMax = "180"))
+    float FromBehindAngle = 120.f;
 
     // How long a hit locks out input; the reaction animation can play on past this
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
@@ -328,6 +364,8 @@ private:
         bool bIsFinisher = false;
         bool bIsTransition = false;
         bool bIsFlashy = false;
+        // Part of a single-press combo with more attacks after it - the next one starts on its own
+        bool bAutoContinue = false;
         bool bTargetHit = false;
         bool bHasLastSocketLocation = false;
         FVector LastSocketLocation = FVector::ZeroVector;
@@ -410,7 +448,13 @@ private:
     TWeakObjectPtr<AEnemyCharacter> HighlightedTarget;
 
     int32 ChainIndex = 0;
+    // 0 = ComboAttacks, n = ExtraComboChains[n - 1]
+    int32 ActiveChain = 0;
     bool bAttackBuffered = false;
+
+    void PickComboChain();
+    const TArray<TObjectPtr<UAttackData>>& GetActiveChain() const;
+    bool IsActiveChainSinglePress() const;
 
     // Who the chain was last hitting, to detect target switches. Cleared when the combo resets.
     TWeakObjectPtr<AEnemyCharacter> LastAttackTarget;
