@@ -30,7 +30,7 @@ See [`Docs/CombatSystem.md`](Docs/CombatSystem.md) for where everything lives.
 
 1. Clone with Git LFS installed (`git lfs install`), so the `.uasset` files download.
    Then add these free Fab packs to the project (they aren't in the repo):
-   Soul: City (Epic Games), Sci-Fi Trooper Man 03, and Easy Impact Frames (Vefects).
+   Sci-Fi Trooper Man 03 and Easy Impact Frames (Vefects).
 2. Right-click `ArkhamCombat.uproject` → **Generate Visual Studio project files**.
 3. Open `ArkhamCombat.sln`, build **Development Editor | Win64**, and run.
 4. Test map: `Content/ThirdPerson/Lvl_ThirdPerson`.
