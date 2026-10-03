@@ -60,9 +60,12 @@ void APlayerCharacter::BeginPlay()
         if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
             ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
         {
-            // The controller adds IMC_Combat at priority 0, which also maps Mouse2D (to IA_Look, with a dead zone).
-            // Higher priority contexts claim a key first, so ours decide what the mouse and sticks do
-            // and IMC_Combat only contributes the attack buttons.
+            // IMC_Combat also maps Mouse2D (to IA_Look, with a dead zone). Higher priority contexts claim a key first,
+            // so the ones above it decide what the mouse and sticks do and IMC_Combat only contributes the attack buttons.
+            if (CombatMappingContext)
+            {
+                Subsystem->AddMappingContext(CombatMappingContext, 0);
+            }
             Subsystem->AddMappingContext(DefaultMappingContext, 1);
             if (MouseLookMappingContext)
             {

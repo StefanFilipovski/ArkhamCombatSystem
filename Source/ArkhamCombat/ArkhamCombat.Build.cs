@@ -16,8 +16,6 @@ public class ArkhamCombat : ModuleRules
 			"EnhancedInput",
 			"AIModule",
 			"NavigationSystem",
-			"StateTreeModule",
-			"GameplayStateTreeModule",
 			"UMG",
 			"MotionWarping",
 			"Niagara",
@@ -28,20 +26,7 @@ public class ArkhamCombat : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"ArkhamCombat",
-			"ArkhamCombat/Variant_Platforming",
-			"ArkhamCombat/Variant_Platforming/Animation",
-			"ArkhamCombat/Variant_Combat",
-			"ArkhamCombat/Variant_Combat/AI",
-			"ArkhamCombat/Variant_Combat/Animation",
-			"ArkhamCombat/Variant_Combat/Gameplay",
-			"ArkhamCombat/Variant_Combat/Interfaces",
-			"ArkhamCombat/Variant_Combat/UI",
-			"ArkhamCombat/Variant_SideScrolling",
-			"ArkhamCombat/Variant_SideScrolling/AI",
-			"ArkhamCombat/Variant_SideScrolling/Gameplay",
-			"ArkhamCombat/Variant_SideScrolling/Interfaces",
-			"ArkhamCombat/Variant_SideScrolling/UI"
+			"ArkhamCombat"
 		});
 
 		// Uncomment if you are using Slate UI
