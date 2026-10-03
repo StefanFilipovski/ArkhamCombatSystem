@@ -67,6 +67,7 @@ void AArkhamCharacterBase::TakeCombatHit(const FCombatHit& Hit, AActor* DamageIn
     if (bIsDead) return;
 
     CurrentHealth = FMath::Clamp(CurrentHealth - Hit.Damage, 0.f, MaxHealth);
+    OnHealthChanged.Broadcast(CurrentHealth, MaxHealth);
 
     UE_LOG(LogTemp, Warning, TEXT("%s took %.1f damage. Health: %.1f"),
         *GetName(), Hit.Damage, CurrentHealth);

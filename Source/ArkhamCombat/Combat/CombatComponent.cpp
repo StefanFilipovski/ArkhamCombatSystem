@@ -125,6 +125,16 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
     if (!OwnerCharacter) return;
 
+    // Combo meter runs down between hits (frozen during hit-pause like everything else on the player)
+    if (ComboCount > 0)
+    {
+        ComboTimeLeft -= DeltaTime;
+        if (ComboTimeLeft <= 0.f)
+        {
+            BreakCombo();
+        }
+    }
+
     if (CombatState == ECombatState::Countering)
     {
         UpdateCounter(DeltaTime);
@@ -610,10 +620,26 @@ void UCombatComponent::CancelAttack()
 
 void UCombatComponent::ResetCombo()
 {
+    // The attack chain only - the combo meter keeps counting until it times out or we get hit
     ChainIndex = 0;
-    ComboCount = 0;
     LastAttackTarget.Reset();
     bChainHasTarget = false;
+}
+
+void UCombatComponent::AddComboHit()
+{
+    ++ComboCount;
+    ComboTimeLeft = ComboTimeout;
+    OnComboChanged.Broadcast(ComboCount);
+}
+
+void UCombatComponent::BreakCombo()
+{
+    if (ComboCount == 0) return;
+
+    ComboCount = 0;
+    ComboTimeLeft = 0.f;
+    OnComboChanged.Broadcast(0);
 }
 
 void UCombatComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted, int32 MontageInstanceID)
@@ -888,7 +914,7 @@ void UCombatComponent::ApplyHit(AArkhamCharacterBase* Victim, const FVector& Imp
     // Everything about how hard this lands comes from the attack's data
     const FCombatHit& Hit = ActiveAttack.Data->Hit;
 
-    ++ComboCount;
+    AddComboHit();
     Victim->TakeCombatHit(Hit, OwnerCharacter);
     PlayHitImpact(ImpactPoint, Hit.CameraShakeScale);
 
@@ -1021,15 +1047,22 @@ void UCombatComponent::StartCounter(AEnemyCharacter* Enemy)
     CounterElapsed = 0.f;
     bCounterImpactDone = false;
 
-    // Line the pair up: stand CounterPairDistance in front of the enemy, facing each other.
-    // The camera lag hides the correction.
+    // Line the pair up the way the paired animation was authored: the enemy turns to us, we stand CounterPairDistance
+    // in front of it and CounterPairSideOffset to its right, facing it. The camera lag hides the correction.
     FVector FromEnemy = OwnerCharacter->GetActorLocation() - Enemy->GetActorLocation();
     FromEnemy.Z = 0.f;
     FromEnemy = FromEnemy.IsNearlyZero() ? Enemy->GetActorForwardVector() : FromEnemy.GetSafeNormal();
 
-    FVector PairLocation = Enemy->GetActorLocation() + FromEnemy * CounterPairDistance;
+    const FRotator EnemyFacing = FromEnemy.Rotation();
+    Enemy->SetActorRotation(EnemyFacing);
+
+    FVector PairLocation = Enemy->GetActorLocation() + FromEnemy * CounterPairDistance +
+        FRotationMatrix(EnemyFacing).GetUnitAxis(EAxis::Y) * CounterPairSideOffset;
     PairLocation.Z = OwnerCharacter->GetActorLocation().Z;
     OwnerCharacter->SetActorLocationAndRotation(PairLocation, (-FromEnemy).Rotation());
+
+    // Both step into each other during the animation; blocked root motion is what pulls the pair out of sync
+    SetIgnoreCounterPartner(Enemy, true);
 
     // Both halves of the paired animation move with root motion
     UCharacterMovementComponent* Movement = OwnerCharacter->GetCharacterMovement();
@@ -1045,6 +1078,22 @@ void UCombatComponent::StartCounter(AEnemyCharacter* Enemy)
     LastAttackTarget = Enemy;
     bChainHasTarget = true;
     ChainIndex = 0;
+}
+
+void UCombatComponent::SetIgnoreCounterPartner(AEnemyCharacter* Enemy, bool bIgnore)
+{
+    if (!IsValid(Enemy)) return;
+
+    if (bIgnore)
+    {
+        OwnerCharacter->MoveIgnoreActorAdd(Enemy);
+        Enemy->MoveIgnoreActorAdd(OwnerCharacter);
+    }
+    else
+    {
+        OwnerCharacter->MoveIgnoreActorRemove(Enemy);
+        Enemy->MoveIgnoreActorRemove(OwnerCharacter);
+    }
 }
 
 bool UCombatComponent::IsEngaging(const AEnemyCharacter* Enemy) const
@@ -1078,7 +1127,7 @@ void UCombatComponent::ApplyCounterImpact()
     if (!Enemy || Enemy->IsDead()) return;
 
     Enemy->TakeCounterHit(CounterAttack->Hit, OwnerCharacter);
-    ++ComboCount;
+    AddComboHit();
 
     FVector ToOwner = OwnerCharacter->GetActorLocation() - Enemy->GetActorLocation();
     ToOwner.Z = 0.f;
@@ -1130,6 +1179,7 @@ void UCombatComponent::EndCounter(bool bStopAnimation)
     ReactionMontage.Reset();
 
     CombatState = ECombatState::Idle;
+    SetIgnoreCounterPartner(CounterTarget.Get(), false);
     CounterTarget.Reset();
     bAttackBuffered = false;
     UnlockMovement();
@@ -1173,8 +1223,10 @@ void UCombatComponent::ReceiveHit(AActor* Attacker, const FCombatHit& Hit)
     if (!OwnerCharacter) return;
 
     CancelActiveAttack();
+    BreakCombo();
     if (CombatState == ECombatState::Countering)
     {
+        SetIgnoreCounterPartner(CounterTarget.Get(), false);
         CounterTarget.Reset();
     }
     CombatState = ECombatState::Staggered;

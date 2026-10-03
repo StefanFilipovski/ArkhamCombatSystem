@@ -10,6 +10,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
+class UUserWidget;
 
 UCLASS()
 class ARKHAMCOMBAT_API APlayerCharacter : public AArkhamCharacterBase
@@ -117,6 +118,10 @@ protected:
     // Counter button. Which keys trigger it is set in the input mapping context, not in code.
     UPROPERTY(EditDefaultsOnly, Category = "Input")
     UInputAction* CounterAction;
+
+    // On-screen HUD (WBP_PlayerHUD, made from PlayerHUDWidget), added when the game starts
+    UPROPERTY(EditDefaultsOnly, Category = "UI")
+    TSubclassOf<UUserWidget> HUDWidgetClass;
 
     // Seconds after going down before the level restarts
     UPROPERTY(EditDefaultsOnly, Category = "Combat")

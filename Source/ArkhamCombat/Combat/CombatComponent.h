@@ -17,6 +17,7 @@ class UNiagaraSystem;
 class USoundBase;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFinalBlow, AActor*, Victim);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnComboChanged, int32, ComboCount);
 
 // One combo, in order - the last attack is its finisher
 USTRUCT(BlueprintType)
@@ -113,7 +114,17 @@ public:
 
     // --- Getters ---
     ECombatState GetCombatState() const { return CombatState; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat|Combo Meter")
     int32 GetComboCount() const { return ComboCount; }
+
+    // 1 right after a hit lands, 0 when the combo breaks
+    UFUNCTION(BlueprintPure, Category = "Combat|Combo Meter")
+    float GetComboTimeRemainingPercent() const { return ComboTimeout > 0.f ? ComboTimeLeft / ComboTimeout : 0.f; }
+
+    // Fires on every hit that adds to the combo, and with 0 when the combo breaks
+    UPROPERTY(BlueprintAssignable, Category = "Combat|Combo Meter")
+    FOnComboChanged OnComboChanged;
     bool IsHitboxActive() const { return AttackPhase == EAttackPhase::Active; }
 
     UFUNCTION(BlueprintPure, Category = "Combat")
@@ -143,14 +154,22 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
     EAttackPhase AttackPhase = EAttackPhase::None;
 
-    // Hits landed in the current chain
+    // Hits landed in the current combo (the combo meter)
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
     int32 ComboCount = 0;
 
     // --- Combo ---
-    // Time after an attack finishes before the chain and combo counter reset
+    // Time after an attack finishes before the attack chain starts over from its first attack
     UPROPERTY(EditDefaultsOnly, Category = "Combat")
     float ComboWindowDuration = 0.8f;
+
+    // Seconds without landing a hit before the combo meter breaks. Getting hit breaks it at once.
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Combo Meter")
+    float ComboTimeout = 2.5f;
+
+    float ComboTimeLeft = 0.f;
+    void AddComboHit();
+    void BreakCombo();
 
     // --- Targeting ---
     // Max distance at which an enemy can be selected as a target
@@ -309,9 +328,14 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Counter")
     float CounterRange = 450.f;
 
-    // Distance the two characters are lined up at for the paired animation
+    // Where the player stands for the paired animation, measured from its contact frames (parry ~82, palm strike ~70):
+    // this far in front of the enemy...
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Counter")
-    float CounterPairDistance = 95.f;
+    float CounterPairDistance = 76.f;
+
+    // ...and this far to the enemy's right (negative = its left)
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Counter")
+    float CounterPairSideOffset = 5.f;
 
     // After the impact, attack/counter/move input can cut the rest of the counter animation
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Counter")
@@ -419,6 +443,8 @@ private:
     void ApplyCounterImpact();
 
     TWeakObjectPtr<AEnemyCharacter> CounterTarget;
+    // The pair walks through each other during the paired animation - capsules would block that root motion
+    void SetIgnoreCounterPartner(AEnemyCharacter* Enemy, bool bIgnore);
     float CounterElapsed = 0.f;
     float CounterLength = 0.f;
     bool bCounterImpactDone = false;

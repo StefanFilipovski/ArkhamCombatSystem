@@ -38,7 +38,7 @@ Rules the code follows:
 
 **`BP_PlayerCharacter` → select `CombatComponent`** in the Components panel
 - Combat|Attacks: `Combo Attacks` (DA_Punch01, DA_Punch02, DA_KickFinisher — in order), `Extra Combo Chains` (more combos, each an ordered list; each chain has a `Chance` of replacing the main combo when a new combo starts. Tick `Play On Single Press` to make it a special combo: one press plays every hit), `Flashy Attacks` (DA_Flashy_*)
-- Combat|Counter: `Counter Attack` (DA_Counter_PalmStrike), `Counter Pair Distance` (how far apart the pair is lined up)
+- Combat|Counter: `Counter Attack` (DA_Counter_PalmStrike), `Counter Pair Distance` + `Counter Pair Side Offset` (where the player stands relative to the enemy; 76 / 5 were measured from the paired animation's contact frames)
 - `AM_PlayerCounter` has a **Counter Impact** notify (Branching Point) on the frame the palm lands — move it to change when the counter damage hits
 - Combat|Hit Reactions: `Hit React Montages` (AM_PlayerHitReact01/02), `Hit React Montages From Behind` (played without turning around when hit from behind), `Death Montage` (AM_PlayerDeath), `Death Montage From Behind`, `From Behind Angle`, `Player Hit Camera Shake`
 - Combat|Impact: `Hit Camera Shake`, `Hit Effect` (NS_Damage), `Hit Sound`
@@ -106,6 +106,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `AEnemyCharacter` | `Characters/EnemyCharacter.*` | Hit reactions, knockback, attacking, being countered, attack indicator |
 | `UEnemyManagerComponent` | `AI/EnemyManagerComponent.*` | On the game mode; surround positions and who attacks when |
 | `AEnemySpawner` | `AI/EnemySpawner.*` | Placed in the level; spawns enemies at its spawn points, counts defeats, ends the encounter |
+| `UPlayerHUDWidget` | `UI/PlayerHUDWidget.*` | HUD logic: health bar + draining trail, driven by `OnHealthChanged`; the look is `WBP_PlayerHUD` |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
 | `UMontageSectionLibrary` | `Combat/MontageSectionLibrary.*` | Editor helper: `SetMontageSections` cuts a multi-hit montage into one section per hit (used for the punch combo montages) |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
@@ -145,7 +146,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 |---|---|
 | Right-click input | `APlayerCharacter::Counter` → `UCombatComponent::TryCounter` |
 | Pick the enemy whose punch lands soonest, in range | `TryCounter` |
-| Align the pair, play both halves of the paired animation | `StartCounter`, `AEnemyCharacter::PlayCountered` |
+| Align the pair as authored (distance + side offset), let the pair pass through each other so their root motion plays out, play both halves | `StartCounter`, `SetIgnoreCounterPartner`, `AEnemyCharacter::PlayCountered` |
 | Damage when the **Counter Impact** notify fires (placed in `AM_PlayerCounter`), cancel windows | `AnimNotify_CounterImpact` → `OnCounterImpact`, `ApplyCounterImpact`, `UpdateCounter`, `EndCounter`, `CanLeaveCounter` |
 | Invulnerable while countering | `IsInvulnerable` (header), checked in `APlayerCharacter::TakeCombatHit` |
 
@@ -180,6 +181,15 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 |---|---|
 | Damage entry point, invulnerability check, death + level restart | `APlayerCharacter::TakeCombatHit`, `Die`, `RestartLevel` |
 | Stagger animation (front or from behind), hit stun, knockdown pose | `UCombatComponent::ReceiveHit`, `EndHitStun`, `PlayReaction` |
+
+### HUD (`UI/PlayerHUDWidget.cpp`)
+| Feature | Function(s) |
+|---|---|
+| Health changes broadcast by every character | `AArkhamCharacterBase::OnHealthChanged` (fired in `TakeCombatHit`) |
+| Health bar + trail that holds the lost chunk, then drains | `UPlayerHUDWidget::HandleHealthChanged`, `NativeTick` |
+| Combo meter: every landed hit (and counter) adds one; breaks after `ComboTimeout` (2.5 s) without a hit, or when the player is hit | `UCombatComponent::AddComboHit`, `BreakCombo`, `OnComboChanged` |
+| Combo number with the Arkham "thump" on each hit, timer bar, highlight colour from 8 hits, grey fade when it breaks (optional `ComboPop` widget animation replaces the built-in thump) | `UPlayerHUDWidget::HandleComboChanged`, `TickCombo` |
+| HUD added at start (class set in `BP_PlayerCharacter` → UI → `HUD Widget Class`) | `APlayerCharacter::BeginPlay` |
 
 ### Camera & input (`Characters/PlayerCharacter.cpp`)
 | Feature | Function(s) |

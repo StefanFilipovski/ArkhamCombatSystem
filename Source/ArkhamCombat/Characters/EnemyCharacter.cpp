@@ -637,15 +637,8 @@ void AEnemyCharacter::PlayCountered(AActor* Counterer)
     RestoreMovement();
     GetCharacterMovement()->StopMovementImmediately();
 
-    if (Counterer)
-    {
-        FVector ToCounterer = Counterer->GetActorLocation() - GetActorLocation();
-        ToCounterer.Z = 0.f;
-        if (!ToCounterer.IsNearlyZero())
-        {
-            SetActorRotation(ToCounterer.Rotation());
-        }
-    }
+    // Facing is set by whoever lines up the pair (UCombatComponent::StartCounter) - turning toward the counterer here
+    // would undo its side offset
 
     AttackEndTime = CounteredMontage ? CounteredMontage->GetPlayLength() : 0.5f;
     if (CounteredMontage)

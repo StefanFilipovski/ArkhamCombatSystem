@@ -8,6 +8,7 @@ class AArkhamCharacterBase;
 class UMaterialInterface;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AArkhamCharacterBase*, Character);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, CurrentHealth, float, MaxHealth);
 
 // One set of materials for the visible model, in material slot order
 USTRUCT(BlueprintType)
@@ -69,12 +70,22 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Combat")
     FOnCharacterDied OnDied;
 
+    // Fires whenever health changes - UI listens here
+    UPROPERTY(BlueprintAssignable, Category = "Combat")
+    FOnHealthChanged OnHealthChanged;
+
     // --- Getters ---
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsDead() const { return bIsDead; }
 
     UFUNCTION(BlueprintPure, Category = "Combat")
     float GetCurrentHealth() const { return CurrentHealth; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    float GetMaxHealth() const { return MaxHealth; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    float GetHealthPercent() const { return MaxHealth > 0.f ? CurrentHealth / MaxHealth : 0.f; }
 
     // Drives the fists-up stance in the anim blueprint
     UFUNCTION(BlueprintPure, Category = "Combat")

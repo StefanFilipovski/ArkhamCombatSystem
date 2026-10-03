@@ -13,6 +13,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Misc/App.h"
+#include "Blueprint/UserWidget.h"
 
 APlayerCharacter::APlayerCharacter()
 {
@@ -73,6 +74,14 @@ void APlayerCharacter::BeginPlay()
     if (CombatComponent)
     {
         CombatComponent->OnFinalBlow.AddDynamic(this, &APlayerCharacter::HandleFinalBlow);
+    }
+
+    if (APlayerController* PC = Cast<APlayerController>(GetController()); PC && HUDWidgetClass)
+    {
+        if (UUserWidget* HUD = CreateWidget<UUserWidget>(PC, HUDWidgetClass))
+        {
+            HUD->AddToViewport();
+        }
     }
 }
 
