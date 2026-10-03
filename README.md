@@ -21,6 +21,7 @@ A melee combat system inspired by the Batman: Arkham series, built in C++ with U
 | `Source/ArkhamCombat/Combat` | Combat component, strike analysis, attack data, anim notifies |
 | `Source/ArkhamCombat/Characters` | Player, enemy and shared character base |
 | `Source/ArkhamCombat/AI` | Enemy manager (positioning and attack pacing) |
+| `Content/ArkhamCombat` | All project assets (characters, attacks, maps, audio, UI) - layout in the guide |
 | `Docs/CombatSystem.md` | System guide: architecture, feature-to-code map, editor setup, tuning |
 
 Code owns the behaviour; the editor owns the content (animations, montages, effects, input, attack data).
@@ -33,4 +34,4 @@ See [`Docs/CombatSystem.md`](Docs/CombatSystem.md) for where everything lives.
    Sci-Fi Trooper Man 03 and Easy Impact Frames (Vefects).
 2. Right-click `ArkhamCombat.uproject` → **Generate Visual Studio project files**.
 3. Open `ArkhamCombat.sln`, build **Development Editor | Win64**, and run.
-4. Test map: `Content/ThirdPerson/Lvl_ThirdPerson`.
+4. Main map: `Content/ArkhamCombat/Maps/Lvl_ThirdPerson` (opens by default).

@@ -20,19 +20,36 @@ Rules the code follows:
   entries in the Blueprint to change it. Code decides *which* attack and *when*; the asset decides *what* and *how hard*.
 - **Blends and slots belong to the montage.** Code just calls `Montage_Play` / `PlayAnimMontage`.
 
+### Content layout
+Everything made for this project lives in `Content/ArkhamCombat/`; third-party Fab packs (`SciFITrooper_Man_03`, `Vefects`) stay outside it.
+
+| Folder | Contents |
+|---|---|
+| `Core` | `BP_ArkhamGameMode` (also plays the background music) |
+| `Maps` | `Lvl_ThirdPerson` - the main level (default map for editor and game) |
+| `Input` | Mapping contexts (`IMC_Combat`, `IMC_Default`, `IMC_MouseLook`) and `Actions/` |
+| `Characters/Player` | `BP_PlayerCharacter`, `Attacks/` (attack data), `Animations/` (montages, `Converted/`, `Counter/`, `HitReacts/`) |
+| `Characters/Enemies` | `BP_EnemyCharacter`, `BP_EnemySpawner`, `Attacks/`, `Animations/`, `Materials/` (attack indicator) |
+| `Characters/Shared` | `ABP_PlayerCharacter` (anim blueprint used by player and enemies) and shared locomotion / hit-reaction animations |
+| `Characters/Mannequins` | The UE5 mannequin the animations run on (meshes, materials, rigs, template animations in use) |
+| `Characters/Trooper` | IK Rig, IK Retargeter and follower anim blueprint that put the trooper model on the mannequin |
+| `Characters/Retargeting` | `RTG_UE4ToUE5` + `IK_UE4Mannequin`, the `UE4Mannequin` they need, and `SourceAnimations/` (UE4 moves kept for converting later) |
+| `Audio` | `Music/` and `Impacts/` (layered `SC_*` sound cues and their sounds) |
+| `UI` | `WBP_PlayerHud`, `WBP_DemoComplete` |
+| `FX` | `NS_Damage` hit effect, `CameraShakes/`, `Materials/` (enemy outline) |
 ### Editor tour — where each asset is plugged in
 
-**`Content/Characters/Player/BP_PlayerCharacter`** → *Class Defaults*
-- Input: `Default Mapping Context`, `Move/Look/Mouse Look/Attack/Counter Action`, `Mouse Look Mapping Context`
-- Keys live in the mapping contexts, not the Blueprint: `Content/Variant_Combat/Input/IMC_Combat` maps
-  `IA_ComboAttack` (left mouse / right bumper) and `IA_Counter` (`Content/Input/Actions`, Pressed trigger).
-  `IMC_Combat` is added by `BP_CombatPlayerController`; the character adds `IMC_Default` and `IMC_MouseLook` on top.
+**`Content/ArkhamCombat/Characters/Player/BP_PlayerCharacter`** → *Class Defaults*
+- Input: `Combat / Default / Mouse Look Mapping Context`, `Move/Look/Mouse Look/Attack/Counter Action`
+- Keys live in the mapping contexts in `Content/ArkhamCombat/Input`, not the Blueprint: `IMC_Combat` maps
+  `IA_ComboAttack` (left mouse / right bumper) and `IA_Counter` (Pressed trigger). The character adds all three
+  contexts; `IMC_Default` and `IMC_MouseLook` sit above `IMC_Combat` so they decide what the mouse and sticks do.
 
 **Character models — `VisualMesh` component** (both character Blueprints, from `AArkhamCharacterBase`)
 - The main `Mesh` (UE5 mannequin) runs every animation and is what the combat code reads. When `VisualMesh` has a
   skeletal mesh, the main Mesh is hidden but keeps animating, and `VisualMesh` copies its pose.
 - `VisualMesh` uses `ABP_TrooperRetarget` (a single **Retarget Pose From Mesh** node, *Use Attached Parent* on),
-  which uses `RTG_Manny_To_Trooper` (IK Rigs `IK_SKM_Manny_Simple` → `IK_Trooper`). All in `Content/Characters/Trooper`.
+  which uses `RTG_Manny_To_Trooper` (IK Rigs `IK_SKM_Manny_Simple` → `IK_Trooper`). All in `Content/ArkhamCombat/Characters/Trooper`.
 - `Looks` (Class Defaults → Appearance): material sets in slot order, one picked at random on spawn — enemy colour variety.
 - Enemy outline is applied to whichever mesh is visible (`GetVisibleMesh`).
 
@@ -43,11 +60,11 @@ Rules the code follows:
 - Combat|Hit Reactions: `Hit React Montages` (AM_PlayerHitReact01/02), `Hit React Montages From Behind` (played without turning around when hit from behind), `Death Montage` (AM_PlayerDeath), `Death Montage From Behind`, `From Behind Angle`, `Player Hit Camera Shake`, `Player Hit Sound` (when an enemy hits the player)
 - Combat|Impact: `Hit Camera Shake`, `Hit Effect` (NS_Damage), `Hit Sound` (default for the player's hits; a Sound Cue with Random + Modulator nodes gives variety)
 
-**`Content/Characters/Enemies/BP_EnemyCharacter`** → *Class Defaults*
+**`Content/ArkhamCombat/Characters/Enemies/BP_EnemyCharacter`** → *Class Defaults*
 - Combat|Animations: `Hit React Montage`, `Stagger Montage Large`, `Death Montage`, `Hit React Sections`, `Stagger Sections`
 - Combat|Attack: `Attacks` (DA_EnemyJab/StraightPunch/HookPunch), `Countered Montage` (AM_EnemyCountered)
 
-**Attack Data assets** — `Content/Characters/Player/Attacks/DA_*`, `Content/Characters/Enemies/Attacks/DA_*`
+**Attack Data assets** — `Content/ArkhamCombat/Characters/Player/Attacks/DA_*`, `Content/ArkhamCombat/Characters/Enemies/Attacks/DA_*`
 - Animation: `Montage`, `Section` (None = whole montage)
 - Hit: `Damage`, `Knockdown Chance` (0 = flinch, 1 = always knocked down), `Knockback Scale`, `Only Hits Target`, `Hit Socket Override`
 - Feel: `Hit Pause Duration` (freeze frame), `Camera Shake Scale`, `Impact Sound` (optional per-attack sound, e.g. heavier for kicks; empty = the default)
@@ -57,12 +74,12 @@ Rules the code follows:
 **`BP_EnemyCharacter` → select `AttackIndicatorRing`**
 - `Static Mesh` (engine Plane), `Materials[0]` (M_AttackIndicator). Any material works as long as it has an `Urgency` scalar parameter.
 
-**`Content/Characters/Enemies/Materials/M_AttackIndicator`** — the ring's whole look
+**`Content/ArkhamCombat/Characters/Enemies/Materials/M_AttackIndicator`** — the ring's whole look
 - Code only sets `Urgency` (0 when the ring appears → 1 when the punch lands) and places the ring.
 - The material turns that into: colour `StartColor → EndColor`, flash rate `FlashRateStart → FlashRateEnd`
   (flashes per second, via Time → Sine), brightness `MinIntensity → MaxIntensity` on each flash.
 
-**`Content/Characters/Enemies/BP_EnemySpawner`** → *Class Defaults* → Encounter
+**`Content/ArkhamCombat/Characters/Enemies/BP_EnemySpawner`** → *Class Defaults* → Encounter
 - `Enemy Class` (BP_EnemyCharacter) and the encounter rules: `Initial Enemies`, `Max Alive Enemies`,
   `Total Enemies`, `Defeats Per Extra Enemy`, `Respawn Delay`, `Min Spawn Distance`, `Restart Delay After Complete`
 - The Blueprint's graph listens to `On Encounter Complete` and shows the end-of-demo message
@@ -74,8 +91,8 @@ Rules the code follows:
 - Numbers can be overridden per level here, the Blueprint holds the defaults.
 
 **Montages** (open one, check the *Asset Details* panel): `Blend In` / `Blend Out` / `Enable Auto Blend Out`
-- Enemy: `Content/Characters/Enemies/Animations/AM_Enemy*`
-- Player: `Content/Characters/Player/PlayerAnimations/AM_Player*` — `AM_PlayerDeath` has auto blend out **off** so the player stays down
+- Enemy: `Content/ArkhamCombat/Characters/Enemies/Animations/AM_Enemy*`
+- Player: `Content/ArkhamCombat/Characters/Player/Animations/AM_Player*` — `AM_PlayerDeath` has auto blend out **off** so the player stays down
 
 ---
 
@@ -109,7 +126,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `UPlayerHUDWidget` | `UI/PlayerHUDWidget.*` | HUD logic: health bar + draining trail, driven by `OnHealthChanged`; the look is `WBP_PlayerHUD` |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
 | `UMontageSectionLibrary` | `Combat/MontageSectionLibrary.*` | Editor helper: `SetMontageSections` cuts a multi-hit montage into one section per hit (used for the punch combo montages) |
-| `USoundCueLibrary` | `Audio/SoundCueLibrary.*` | Editor helper: `BuildLayeredSoundCue` builds a Random + Random → Mixer → Modulator Sound Cue (used for `Content/Sounds/SC_*`) |
+| `USoundCueLibrary` | `Audio/SoundCueLibrary.*` | Editor helper: `BuildLayeredSoundCue` builds a Random + Random → Mixer → Modulator Sound Cue (used for `Content/ArkhamCombat/Audio/Impacts/SC_*`) |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
 
 ---
@@ -223,11 +240,11 @@ These were done with Unreal's editor Python API (commandlet / `-ExecutePythonScr
 
 | Change | Assets | Why |
 |---|---|---|
-| Enabled **Root Motion** | `Characters/Player/PlayerAnimations/H2H_*_Forward` (4 kicks) | Travel was drawn as mesh offset → overshoot and snap-back |
+| Enabled **Root Motion** | `Characters/Player/Animations/H2H_*_Forward` (4 kicks) | Travel was drawn as mesh offset → overshoot and snap-back |
 | Enabled **Root Motion** | `Characters/Enemies/Animations/H2H_StaggerLarge01-03` | Same snap-back on enemy staggers |
-| **Retargeted** UE4 → UE5 mannequin with `Characters/Anims/RTG_UE4ToUE5`, root motion enabled | `Enemies/Animations/Attacks/*` (jab, straight, hook), `Enemies/Animations/Counter/Paired_CounterPunch_PalmStrike_Att`, `Player/PlayerAnimations/Counter/Paired_CounterPunch_PalmStrike_Vic`, `Player/PlayerAnimations/HitReacts/*` | Source anims (RamsterZ pack) are on the UE4 skeleton |
+| **Retargeted** UE4 → UE5 mannequin with `Characters/Retargeting/RTG_UE4ToUE5`, root motion enabled | `Enemies/Animations/Attacks/*` (jab, straight, hook), `Enemies/Animations/Counter/Paired_CounterPunch_PalmStrike_Att`, `Player/Animations/Counter/Paired_CounterPunch_PalmStrike_Vic`, `Player/Animations/HitReacts/*` | Source anims (RamsterZ pack) are on the UE4 skeleton |
 | **Created material** | `Characters/Enemies/Materials/M_AttackIndicator` | Additive, unlit, no depth test; ring drawn by a Custom HLSL node |
-| **Created montages** | `Enemies/Animations/AM_EnemyJab`, `AM_EnemyStraightPunch`, `AM_EnemyHookPunch`, `AM_EnemyCountered`; `Player/PlayerAnimations/AM_PlayerCounter`, `AM_PlayerHitReact01/02`, `AM_PlayerDeath` | Blends, slot and auto blend out live in the asset instead of code |
+| **Created montages** | `Enemies/Animations/AM_EnemyJab`, `AM_EnemyStraightPunch`, `AM_EnemyHookPunch`, `AM_EnemyCountered`; `Player/Animations/AM_PlayerCounter`, `AM_PlayerHitReact01/02`, `AM_PlayerDeath` | Blends, slot and auto blend out live in the asset instead of code |
 | **Assigned Blueprint defaults** | `BP_PlayerCharacter` (+ its CombatComponent), `BP_EnemyCharacter` (+ its AttackIndicatorRing) | All content references listed in the editor tour above |
 
 Backups of the originals: `C:\Portfolio\Projects\ArkhamCombat_Asset_Backup_2026-09-24\`.
