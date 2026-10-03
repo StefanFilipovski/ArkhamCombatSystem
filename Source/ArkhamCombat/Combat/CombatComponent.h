@@ -30,6 +30,10 @@ struct FComboChain
     // A special combo: one press plays every attack in the chain, each flowing into the next
     UPROPERTY(EditAnywhere, Category = "Combat")
     bool bPlayOnSinglePress = false;
+
+    // How often a new combo uses this chain instead of Combo Attacks (0.15 = roughly one combo in seven)
+    UPROPERTY(EditAnywhere, Category = "Combat", meta = (ClampMin = "0", ClampMax = "1"))
+    float Chance = 0.25f;
 };
 
 UENUM(BlueprintType)
@@ -278,7 +282,7 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Attacks")
     TArray<TObjectPtr<UAttackData>> ComboAttacks;
 
-    // More combos. Every new combo picks one at random from Combo Attacks and these.
+    // More combos. Each new combo rolls every chain's Chance in turn; if none hits, it's Combo Attacks.
     // Sections cut from one multi-hit animation make a chain that flows like the original.
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Attacks")
     TArray<FComboChain> ExtraComboChains;
@@ -373,7 +377,8 @@ private:
     };
 
     // --- Attack Flow ---
-    void StartAttack();
+    // bFlowOn: the montage already played on into this attack's section - keep its instance instead of restarting it
+    void StartAttack(bool bFlowOn = false);
     const UAttackData* PickFlashyAttack();
     void OpenHitWindow();
     void CloseHitWindow();
@@ -455,6 +460,7 @@ private:
     void PickComboChain();
     const TArray<TObjectPtr<UAttackData>>& GetActiveChain() const;
     bool IsActiveChainSinglePress() const;
+    const UAttackData* GetNextFlowingAttack() const;
 
     // Who the chain was last hitting, to detect target switches. Cleared when the combo resets.
     TWeakObjectPtr<AEnemyCharacter> LastAttackTarget;

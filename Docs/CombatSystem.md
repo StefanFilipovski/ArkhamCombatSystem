@@ -37,7 +37,7 @@ Rules the code follows:
 - Enemy outline is applied to whichever mesh is visible (`GetVisibleMesh`).
 
 **`BP_PlayerCharacter` → select `CombatComponent`** in the Components panel
-- Combat|Attacks: `Combo Attacks` (DA_Punch01, DA_Punch02, DA_KickFinisher — in order), `Extra Combo Chains` (more combos, each an ordered list; a new combo picks one chain at random. Tick `Play On Single Press` on a chain to make it a special combo: one press plays every hit), `Flashy Attacks` (DA_Flashy_*)
+- Combat|Attacks: `Combo Attacks` (DA_Punch01, DA_Punch02, DA_KickFinisher — in order), `Extra Combo Chains` (more combos, each an ordered list; each chain has a `Chance` of replacing the main combo when a new combo starts. Tick `Play On Single Press` to make it a special combo: one press plays every hit), `Flashy Attacks` (DA_Flashy_*)
 - Combat|Counter: `Counter Attack` (DA_Counter_PalmStrike), `Counter Pair Distance` (how far apart the pair is lined up)
 - `AM_PlayerCounter` has a **Counter Impact** notify (Branching Point) on the frame the palm lands — move it to change when the counter damage hits
 - Combat|Hit Reactions: `Hit React Montages` (AM_PlayerHitReact01/02), `Hit React Montages From Behind` (played without turning around when hit from behind), `Death Montage` (AM_PlayerDeath), `Death Montage From Behind`, `From Behind Angle`, `Player Hit Camera Shake`
@@ -107,6 +107,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `UEnemyManagerComponent` | `AI/EnemyManagerComponent.*` | On the game mode; surround positions and who attacks when |
 | `AEnemySpawner` | `AI/EnemySpawner.*` | Placed in the level; spawns enemies at its spawn points, counts defeats, ends the encounter |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
+| `UMontageSectionLibrary` | `Combat/MontageSectionLibrary.*` | Editor helper: `SetMontageSections` cuts a multi-hit montage into one section per hit (used for the punch combo montages) |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
 
 ---
@@ -119,7 +120,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | Attack input, buffering, cancel windows | `TryAttack`, `SetMovementInput` |
 | Target selection (stick direction → current → facing → any) | `SelectTarget`, `FindTargetInDirection`, `IsTargetable` |
 | Outline on next target | `UpdateTargetHighlight` |
-| Choosing the attack: next in the current combo chain (picked at random from `ComboAttacks` + `ExtraComboChains` when a combo starts), or a `FlashyAttacks` entry on target switch / far target / killing finisher | `StartAttack`, `PickComboChain`, `PickFlashyAttack` |
+| Choosing the attack: next in the current combo chain (`ComboAttacks`, unless an `ExtraComboChains` entry wins its `Chance` roll when a combo starts), or a `FlashyAttacks` entry on target switch / far target / killing finisher | `StartAttack`, `PickComboChain`, `PickFlashyAttack` |
 | What an attack is and how hard it hits (data asset + the `FCombatHit` passed to the victim) | `Combat/AttackData.h` |
 | Reading contact frame + striking limb from the animation | `AnalyzeStrike` → `StrikeAnalysis::Analyze` |
 | Code-driven approach (slide timed to contact) | `UpdateApproach`, `UpdateFacing` |

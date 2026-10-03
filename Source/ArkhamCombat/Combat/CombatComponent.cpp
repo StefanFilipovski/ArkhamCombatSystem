@@ -172,12 +172,25 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
             ActiveAttack.RecoveryElapsed += DeltaTime;
         }
 
-        // Single-press combo: start the next hit right as this section ends. Neighbouring sections share
-        // the frame at the cut, so the new montage instance blends between identical poses and the motion flows on.
-        if (ActiveAttack.bAutoContinue && ActiveAttack.bContactReached &&
+        // Next hit wanted (single-press combo, or a press already made). When it's the following section of the same
+        // animation, link the sections so the montage plays straight on - restarting it would blend the next swing away.
+        const bool bWantsNextHit = ActiveAttack.bAutoContinue || bAttackBuffered;
+        const UAttackData* FlowingAttack = bWantsNextHit ? GetNextFlowingAttack() : nullptr;
+        UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
+        UAnimMontage* PlayingMontage = const_cast<UAnimMontage*>(ActiveAttack.Montage);
+
+        if (FlowingAttack && AnimInstance)
+        {
+            AnimInstance->Montage_SetNextSection(ActiveAttack.Section, FlowingAttack->Section, PlayingMontage);
+            if (AnimInstance->Montage_GetCurrentSection(PlayingMontage) == FlowingAttack->Section)
+            {
+                StartAttack(true);
+            }
+        }
+        else if (ActiveAttack.bAutoContinue && ActiveAttack.bContactReached &&
             ActiveAttack.Elapsed >= ActiveAttack.SectionEnd - ActiveAttack.SectionStart - AutoContinueLead)
         {
-            // StartAttack reads this to know it's continuing the combo
+            // Single-press combo whose next hit is a different montage - start it as this one ends
             StartAttack();
         }
     }
@@ -202,7 +215,7 @@ void UCombatComponent::TryAttack()
     case ECombatState::Attacking:
         // Recovery is cancelable, earlier phases buffer the press until the hit window closes.
         // A single-press combo plays out first - the press waits for its last hit.
-        if (AttackPhase == EAttackPhase::Recovery && !ActiveAttack.bAutoContinue)
+        if (AttackPhase == EAttackPhase::Recovery && !ActiveAttack.bAutoContinue && !GetNextFlowingAttack())
         {
             StartAttack();
         }
@@ -271,7 +284,7 @@ bool UCombatComponent::HasRecentMovementInput() const
 // Attack Flow
 // ---------------------------------------------------------------------------
 
-void UCombatComponent::StartAttack()
+void UCombatComponent::StartAttack(bool bFlowOn)
 {
     if (ComboAttacks.IsEmpty()) return;
 
@@ -403,15 +416,22 @@ void UCombatComponent::StartAttack()
     NewAttack.bUseWarp = bUseMotionWarping && MotionWarping && Target && Strike.bValid &&
         Strike.RootTravelToContact >= MinWarpRootTravel;
 
-    // Playing a new montage interrupts the previous one; its end delegate is ignored via instance ID
-    if (AnimInstance->Montage_Play(Montage, 1.f) <= 0.f)
+    // Already playing on into this section: keep that montage instance, the swing is under way
+    const bool bKeepPlaying = bFlowOn && Montage == ActiveAttack.Montage &&
+        AnimInstance->Montage_GetCurrentSection(Montage) == NewAttack.Section;
+
+    // Otherwise playing a new montage interrupts the previous one; its end delegate is ignored via instance ID
+    if (!bKeepPlaying && AnimInstance->Montage_Play(Montage, 1.f) <= 0.f)
     {
         ActiveAttack.bAutoContinue = false;
         return;
     }
     if (!NewAttack.Section.IsNone())
     {
-        AnimInstance->Montage_JumpToSection(NewAttack.Section, Montage);
+        if (!bKeepPlaying)
+        {
+            AnimInstance->Montage_JumpToSection(NewAttack.Section, Montage);
+        }
         AnimInstance->Montage_SetNextSection(NewAttack.Section, NAME_None, Montage);
     }
 
@@ -462,16 +482,17 @@ FStrikeInfo UCombatComponent::AnalyzeStrike(const UAnimMontage* Montage, FName S
 
 void UCombatComponent::PickComboChain()
 {
-    // Every chain with something in it is a candidate; Combo Attacks is never empty here
-    TArray<int32> Candidates = { 0 };
+    // Combo Attacks is the main combo; each extra chain gets its own roll to take over this time
+    ActiveChain = 0;
     for (int32 i = 0; i < ExtraComboChains.Num(); ++i)
     {
-        if (!ExtraComboChains[i].Attacks.IsEmpty())
+        const FComboChain& Chain = ExtraComboChains[i];
+        if (!Chain.Attacks.IsEmpty() && FMath::FRand() < Chain.Chance)
         {
-            Candidates.Add(i + 1);
+            ActiveChain = i + 1;
+            return;
         }
     }
-    ActiveChain = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
 }
 
 const TArray<TObjectPtr<UAttackData>>& UCombatComponent::GetActiveChain() const
@@ -482,6 +503,42 @@ const TArray<TObjectPtr<UAttackData>>& UCombatComponent::GetActiveChain() const
 bool UCombatComponent::IsActiveChainSinglePress() const
 {
     return ExtraComboChains.IsValidIndex(ActiveChain - 1) && ExtraComboChains[ActiveChain - 1].bPlayOnSinglePress;
+}
+
+const UAttackData* UCombatComponent::GetNextFlowingAttack() const
+{
+    // Only mid-chain, never out of a flashy attack (that restarts the chain)
+    if (CombatState != ECombatState::Attacking || ActiveAttack.bIsFlashy || !ActiveAttack.Montage || ChainIndex == 0)
+    {
+        return nullptr;
+    }
+
+    const TArray<TObjectPtr<UAttackData>>& Chain = GetActiveChain();
+    const UAttackData* Next = Chain.IsValidIndex(ChainIndex) ? Chain[ChainIndex].Get() : nullptr;
+    if (!Next || Next->Montage != ActiveAttack.Montage)
+    {
+        return nullptr;
+    }
+
+    // Has to be the very next section...
+    float NextStart = 0.f;
+    float NextEnd = 0.f;
+    if (!StrikeAnalysis::GetSectionRange(ActiveAttack.Montage, Next->Section, NextStart, NextEnd) ||
+        !FMath::IsNearlyEqual(NextStart, ActiveAttack.SectionEnd, 0.01f))
+    {
+        return nullptr;
+    }
+
+    // ...cut from the same animation, so the pose at the cut carries straight on. Sections that are separate
+    // animations placed back to back (like the default combo) restart with a blend instead.
+    const UAnimMontage* Montage = ActiveAttack.Montage;
+    if (Montage->SlotAnimTracks.IsEmpty())
+    {
+        return nullptr;
+    }
+    const FAnimTrack& Track = Montage->SlotAnimTracks[0].AnimTrack;
+    const int32 SegmentBefore = Track.GetSegmentIndexAtTime(NextStart - 0.01f);
+    return SegmentBefore != INDEX_NONE && SegmentBefore == Track.GetSegmentIndexAtTime(NextStart + 0.01f) ? Next : nullptr;
 }
 
 const UAttackData* UCombatComponent::PickFlashyAttack()
@@ -520,7 +577,8 @@ void UCombatComponent::CloseHitWindow()
     AttackPhase = EAttackPhase::Recovery;
     ActiveAttack.RecoveryElapsed = 0.f;
 
-    if (bAttackBuffered && !ActiveAttack.bAutoContinue)
+    // A hit that flows on from this animation waits for the section to end instead (see TickComponent)
+    if (bAttackBuffered && !ActiveAttack.bAutoContinue && !GetNextFlowingAttack())
     {
         StartAttack();
     }
