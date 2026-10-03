@@ -40,8 +40,8 @@ Rules the code follows:
 - Combat|Attacks: `Combo Attacks` (DA_Punch01, DA_Punch02, DA_KickFinisher — in order), `Extra Combo Chains` (more combos, each an ordered list; each chain has a `Chance` of replacing the main combo when a new combo starts. Tick `Play On Single Press` to make it a special combo: one press plays every hit), `Flashy Attacks` (DA_Flashy_*)
 - Combat|Counter: `Counter Attack` (DA_Counter_PalmStrike), `Counter Pair Distance` + `Counter Pair Side Offset` (where the player stands relative to the enemy; 76 / 5 were measured from the paired animation's contact frames)
 - `AM_PlayerCounter` has a **Counter Impact** notify (Branching Point) on the frame the palm lands — move it to change when the counter damage hits
-- Combat|Hit Reactions: `Hit React Montages` (AM_PlayerHitReact01/02), `Hit React Montages From Behind` (played without turning around when hit from behind), `Death Montage` (AM_PlayerDeath), `Death Montage From Behind`, `From Behind Angle`, `Player Hit Camera Shake`
-- Combat|Impact: `Hit Camera Shake`, `Hit Effect` (NS_Damage), `Hit Sound`
+- Combat|Hit Reactions: `Hit React Montages` (AM_PlayerHitReact01/02), `Hit React Montages From Behind` (played without turning around when hit from behind), `Death Montage` (AM_PlayerDeath), `Death Montage From Behind`, `From Behind Angle`, `Player Hit Camera Shake`, `Player Hit Sound` (when an enemy hits the player)
+- Combat|Impact: `Hit Camera Shake`, `Hit Effect` (NS_Damage), `Hit Sound` (default for the player's hits; a Sound Cue with Random + Modulator nodes gives variety)
 
 **`Content/Characters/Enemies/BP_EnemyCharacter`** → *Class Defaults*
 - Combat|Animations: `Hit React Montage`, `Stagger Montage Large`, `Death Montage`, `Hit React Sections`, `Stagger Sections`
@@ -50,7 +50,7 @@ Rules the code follows:
 **Attack Data assets** — `Content/Characters/Player/Attacks/DA_*`, `Content/Characters/Enemies/Attacks/DA_*`
 - Animation: `Montage`, `Section` (None = whole montage)
 - Hit: `Damage`, `Knockdown Chance` (0 = flinch, 1 = always knocked down), `Knockback Scale`, `Only Hits Target`, `Hit Socket Override`
-- Feel: `Hit Pause Duration` (freeze frame), `Camera Shake Scale`
+- Feel: `Hit Pause Duration` (freeze frame), `Camera Shake Scale`, `Impact Sound` (optional per-attack sound, e.g. heavier for kicks; empty = the default)
 - Movement: `Fallback Strike Distance` (only used if the reach can't be read from the animation)
 - Create new ones: Content Browser → right-click → *Miscellaneous* → *Data Asset* → **AttackData**
 
@@ -109,6 +109,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `UPlayerHUDWidget` | `UI/PlayerHUDWidget.*` | HUD logic: health bar + draining trail, driven by `OnHealthChanged`; the look is `WBP_PlayerHUD` |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
 | `UMontageSectionLibrary` | `Combat/MontageSectionLibrary.*` | Editor helper: `SetMontageSections` cuts a multi-hit montage into one section per hit (used for the punch combo montages) |
+| `USoundCueLibrary` | `Audio/SoundCueLibrary.*` | Editor helper: `BuildLayeredSoundCue` builds a Random + Random → Mixer → Modulator Sound Cue (used for `Content/Sounds/SC_*`) |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
 
 ---
@@ -243,4 +244,5 @@ Original source backup: `C:\Portfolio\Projects\ArkhamCombat_Source_Backup_2026-0
 | `DA_*` Attack Data assets | Hit, Feel | `Damage`, `KnockdownChance`, `KnockbackScale`, `HitPauseDuration`, `CameraShakeScale` — per attack |
 | `BP_EnemyCharacter` | Combat\|Attack, Indicator, Knockback | `CounterWindow`, `AttackLockoutAfterHit`, `bIndicatorOnStrikingHand`, `HitKnockbackDistance` |
 | `BP_ArkhamGameMode` | EnemyManager → AI\|Attacks | `SoloAttackInterval`, `CrowdAttackInterval`, `EnemiesPerAttacker`, `bEnemiesAttack` |
+| `BP_ArkhamGameMode` | Audio | `BackgroundMusic` (Machine_Language, Looping ticked on the sound), `MusicVolume`, `MusicFadeInTime`, `MusicFadeOutTime` (on player death) |
 | `BP_EnemySpawner` (or the placed instance) | Encounter | `InitialEnemies`, `MaxAliveEnemies`, `TotalEnemies`, `DefeatsPerExtraEnemy`, `RespawnDelay`, `MinSpawnDistance` |

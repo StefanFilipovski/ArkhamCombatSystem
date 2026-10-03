@@ -22,6 +22,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
+#include "Sound/SoundBase.h"
 
 namespace
 {
@@ -916,7 +917,7 @@ void UCombatComponent::ApplyHit(AArkhamCharacterBase* Victim, const FVector& Imp
 
     AddComboHit();
     Victim->TakeCombatHit(Hit, OwnerCharacter);
-    PlayHitImpact(ImpactPoint, Hit.CameraShakeScale);
+    PlayHitImpact(ImpactPoint, Hit);
 
     // Knocked down or out - let go immediately so the next press (or a buffered one) goes to someone else
     if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Victim);
@@ -939,13 +940,13 @@ void UCombatComponent::ApplyHit(AArkhamCharacterBase* Victim, const FVector& Imp
 // Impact
 // ---------------------------------------------------------------------------
 
-void UCombatComponent::PlayHitImpact(const FVector& ImpactPoint, float ShakeScale)
+void UCombatComponent::PlayHitImpact(const FVector& ImpactPoint, const FCombatHit& Hit)
 {
     if (HitCameraShake)
     {
         if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController()))
         {
-            PC->ClientStartCameraShake(HitCameraShake, ShakeScale);
+            PC->ClientStartCameraShake(HitCameraShake, Hit.CameraShakeScale);
         }
     }
 
@@ -954,9 +955,10 @@ void UCombatComponent::PlayHitImpact(const FVector& ImpactPoint, float ShakeScal
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, HitEffect, ImpactPoint, OwnerCharacter->GetActorRotation());
     }
 
-    if (HitSound)
+    // The attack's own sound if it has one (heavier for kicks...), else the default
+    if (USoundBase* Sound = Hit.ImpactSound ? Hit.ImpactSound.Get() : HitSound.Get())
     {
-        UGameplayStatics::PlaySoundAtLocation(this, HitSound, ImpactPoint);
+        UGameplayStatics::PlaySoundAtLocation(this, Sound, ImpactPoint);
     }
 }
 
@@ -1133,7 +1135,7 @@ void UCombatComponent::ApplyCounterImpact()
     ToOwner.Z = 0.f;
     const FVector ImpactPoint = Enemy->GetActorLocation() +
         ToOwner.GetSafeNormal() * Enemy->GetSimpleCollisionRadius() + FVector(0.f, 0.f, 40.f);
-    PlayHitImpact(ImpactPoint, CounterAttack->Hit.CameraShakeScale);
+    PlayHitImpact(ImpactPoint, CounterAttack->Hit);
 
     if (Enemy->IsDead() && IsLastEnemyStanding(Enemy))
     {
@@ -1238,6 +1240,11 @@ void UCombatComponent::ReceiveHit(AActor* Attacker, const FCombatHit& Hit)
         {
             PC->ClientStartCameraShake(PlayerHitCameraShake, Hit.CameraShakeScale);
         }
+    }
+    if (USoundBase* Sound = Hit.ImpactSound ? Hit.ImpactSound.Get() : PlayerHitSound.Get())
+    {
+        // Chest height, so it sits where the punch lands
+        UGameplayStatics::PlaySoundAtLocation(this, Sound, OwnerCharacter->GetActorLocation() + FVector(0.f, 0.f, 40.f));
     }
     TriggerHitPause(Attacker, Hit.HitPauseDuration);
 

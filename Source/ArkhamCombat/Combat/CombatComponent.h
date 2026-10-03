@@ -282,6 +282,7 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Impact")
     TObjectPtr<UNiagaraSystem> HitEffect;
 
+    // Default sound for the player's hits landing; an attack's own Impact Sound replaces it
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Impact")
     TObjectPtr<USoundBase> HitSound;
 
@@ -370,6 +371,10 @@ protected:
     // Played when the player is hit; how hard it shakes and freezes comes from the enemy attack's data
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
     TSubclassOf<UCameraShakeBase> PlayerHitCameraShake;
+
+    // Played when an enemy hits the player; the enemy attack's own Impact Sound replaces it
+    UPROPERTY(EditDefaultsOnly, Category = "Combat|Hit Reactions")
+    TObjectPtr<USoundBase> PlayerHitSound;
 
 private:
     struct FActiveAttack
@@ -460,7 +465,7 @@ private:
     FTimerHandle HitStunTimer;
 
     // --- Impact ---
-    void PlayHitImpact(const FVector& ImpactPoint, float ShakeScale);
+    void PlayHitImpact(const FVector& ImpactPoint, const FCombatHit& Hit);
     void TriggerHitPause(AActor* HitActor, float Duration);
     void EndHitPause();
     bool IsLastEnemyStanding(const AActor* Victim) const;

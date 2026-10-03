@@ -5,6 +5,7 @@
 #include "AttackData.generated.h"
 
 class UAnimMontage;
+class USoundBase;
 
 // What a hit does to whoever it lands on. Carried from the attacker to the victim.
 USTRUCT(BlueprintType)
@@ -30,6 +31,11 @@ struct FCombatHit
     // Strength of the hit camera shake
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Feel", meta = (ClampMin = "0.0"))
     float CameraShakeScale = 0.4f;
+
+    // Played where this hit lands, e.g. a heavier cue for kicks. Empty = the default sound
+    // (Hit Sound for the player's attacks, Player Hit Sound when an enemy hits the player).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Feel")
+    TObjectPtr<USoundBase> ImpactSound;
 };
 
 /**
