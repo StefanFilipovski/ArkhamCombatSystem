@@ -30,9 +30,7 @@ public:
 
     virtual void OnConstruction(const FTransform& Transform) override;
 
-    // The model the player sees. Empty = the main Mesh is shown as before.
-    // When set, the main Mesh keeps running every animation hidden (combat reads its bones) and this one copies its pose,
-    // usually through a Retarget Pose From Mesh anim blueprint.
+   
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Appearance")
     TObjectPtr<USkeletalMeshComponent> VisualMesh;
 

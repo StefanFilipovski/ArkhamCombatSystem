@@ -33,7 +33,7 @@ public:
     UFUNCTION(BlueprintPure, Category = "Encounter")
     int32 GetEnemiesRemaining() const { return TotalEnemies - DefeatedCount; }
 
-    // Fires on every defeated enemy - hook UI up here
+    // Fires on every defeated enemy
     UPROPERTY(BlueprintAssignable, Category = "Encounter")
     FOnEnemyDefeated OnEnemyDefeated;
 

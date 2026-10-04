@@ -332,9 +332,6 @@ void UCombatComponent::StartAttack(bool bFlowOn)
         : 0.f;
 
     // Choose the attack:
-    //   new target mid-chain or far away   -> flashy attack, restarts the combo
-    //   otherwise                          -> next attack in the current combo chain
-    //   ...and if the last one will kill   -> flashy attack as the finisher
     if (ChainIndex == 0)
     {
         PickComboChain();
@@ -476,7 +473,7 @@ FStrikeInfo UCombatComponent::AnalyzeStrike(const UAnimMontage* Montage, FName S
     float SectionEnd = 0.f;
     if (StrikeAnalysis::GetSectionRange(Montage, Section, SectionStart, SectionEnd))
     {
-        // Character forward in mesh component space (+Y for the mannequin, whose mesh is rotated -90)
+        // Character forward in mesh component space
         const FVector Forward = OwnerCharacter->GetMesh()->GetRelativeRotation().UnrotateVector(FVector::ForwardVector);
         Info = StrikeAnalysis::Analyze(Montage, SectionStart, SectionEnd, StrikeBones, Forward, ContactExtension);
     }
@@ -955,7 +952,7 @@ void UCombatComponent::PlayHitImpact(const FVector& ImpactPoint, const FCombatHi
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, HitEffect, ImpactPoint, OwnerCharacter->GetActorRotation());
     }
 
-    // The attack's own sound if it has one (heavier for kicks...), else the default
+    // The attack's own sound
     if (USoundBase* Sound = Hit.ImpactSound ? Hit.ImpactSound.Get() : HitSound.Get())
     {
         UGameplayStatics::PlaySoundAtLocation(this, Sound, ImpactPoint);

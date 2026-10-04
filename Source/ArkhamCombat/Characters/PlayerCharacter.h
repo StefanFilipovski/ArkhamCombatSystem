@@ -92,7 +92,6 @@ protected:
     float FinalBlowInterpSpeed = 5.f;
 
     // --- Input ---
-    // Attack and counter buttons (IMC_Combat). Lowest priority: it also maps the mouse, which the contexts below override.
     UPROPERTY(EditDefaultsOnly, Category = "Input")
     UInputMappingContext* CombatMappingContext;
 

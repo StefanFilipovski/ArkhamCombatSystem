@@ -23,8 +23,7 @@ public:
 protected:
     virtual void BeginPlay() override;
 
-    // Background track for the whole level, played 2D. Tick Looping on the sound asset so it repeats;
-    // reloading the level (death, demo end) starts it over.
+    // Background track for the whole level
     UPROPERTY(EditDefaultsOnly, Category = "Audio")
     TObjectPtr<USoundBase> BackgroundMusic;
 

@@ -60,8 +60,7 @@ void APlayerCharacter::BeginPlay()
         if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
             ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
         {
-            // IMC_Combat also maps Mouse2D (to IA_Look, with a dead zone). Higher priority contexts claim a key first,
-            // so the ones above it decide what the mouse and sticks do and IMC_Combat only contributes the attack buttons.
+            
             if (CombatMappingContext)
             {
                 Subsystem->AddMappingContext(CombatMappingContext, 0);
@@ -140,7 +139,6 @@ void APlayerCharacter::Move(const FInputActionValue& Value)
 
 void APlayerCharacter::Look(const FInputActionValue& Value)
 {
-    // Stick is a rate, so scale by frame time to be framerate independent
     const FVector2D LookVector = Value.Get<FVector2D>() * GamepadLookSensitivity * GetWorld()->GetDeltaSeconds();
     AddControllerYawInput(LookVector.X);
     AddControllerPitchInput(LookVector.Y);
@@ -148,7 +146,6 @@ void APlayerCharacter::Look(const FInputActionValue& Value)
 
 void APlayerCharacter::MouseLook(const FInputActionValue& Value)
 {
-    // Mouse is already a per-frame delta
     const FVector2D LookVector = Value.Get<FVector2D>() * MouseLookSensitivity;
     AddControllerYawInput(LookVector.X);
     AddControllerPitchInput(LookVector.Y);

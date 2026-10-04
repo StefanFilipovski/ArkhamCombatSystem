@@ -125,8 +125,6 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `AEnemySpawner` | `AI/EnemySpawner.*` | Placed in the level; spawns enemies at its spawn points, counts defeats, ends the encounter |
 | `UPlayerHUDWidget` | `UI/PlayerHUDWidget.*` | HUD logic: health bar + draining trail, driven by `OnHealthChanged`; the look is `WBP_PlayerHUD` |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
-| `UMontageSectionLibrary` | `Combat/MontageSectionLibrary.*` | Editor helper: `SetMontageSections` cuts a multi-hit montage into one section per hit (used for the punch combo montages) |
-| `USoundCueLibrary` | `Audio/SoundCueLibrary.*` | Editor helper: `BuildLayeredSoundCue` builds a Random + Random → Mixer → Modulator Sound Cue (used for `Content/ArkhamCombat/Audio/Impacts/SC_*`) |
 | Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
 
 ---
