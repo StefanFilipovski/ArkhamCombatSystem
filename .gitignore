@@ -21,6 +21,7 @@ Content/SciFITrooper_Man_03/
 *.vcxproj.user
 
 # Build output
+Build/Windows/FileOpenOrder/
 *.pdb
 *.obj
 *.exe
