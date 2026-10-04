@@ -7,10 +7,7 @@ Plugins/**/Binaries/
 Plugins/**/Intermediate/
 
 # Fab packs - download them from Fab, see README (too big for LFS, and their license forbids redistribution)
-Content/ParagonWraith/
 Content/SciFITrooper_Man_03/
-Content/SoulCity/
-Content/Vefects/
 
 # Visual Studio / Rider
 .vs/

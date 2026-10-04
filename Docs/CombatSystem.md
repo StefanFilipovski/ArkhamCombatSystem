@@ -21,7 +21,7 @@ Rules the code follows:
 - **Blends and slots belong to the montage.** Code just calls `Montage_Play` / `PlayAnimMontage`.
 
 ### Content layout
-Everything made for this project lives in `Content/ArkhamCombat/`; third-party Fab packs (`SciFITrooper_Man_03`, `Vefects`) stay outside it.
+Everything made for this project lives in `Content/ArkhamCombat/`; the third-party Fab pack `SciFITrooper_Man_03` stays outside it.
 
 | Folder | Contents |
 |---|---|

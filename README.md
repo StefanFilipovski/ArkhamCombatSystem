@@ -30,8 +30,7 @@ See [`Docs/CombatSystem.md`](Docs/CombatSystem.md) for where everything lives.
 ## Building
 
 1. Clone with Git LFS installed (`git lfs install`), so the `.uasset` files download.
-   Then add these free Fab packs to the project (they aren't in the repo):
-   Sci-Fi Trooper Man 03 and Easy Impact Frames (Vefects).
+   Then add the free Fab pack Sci-Fi Trooper Man 03 to the project (it isn't in the repo).
 2. Right-click `ArkhamCombat.uproject` → **Generate Visual Studio project files**.
 3. Open `ArkhamCombat.sln`, build **Development Editor | Win64**, and run.
 4. Main map: `Content/ArkhamCombat/Maps/Lvl_ThirdPerson` (opens by default).
