@@ -1,7 +1,5 @@
 #include "Combat/CombatComponent.h"
-#include "Combat/AnimNotify_EnableHitbox.h"
 #include "Combat/AnimNotify_CounterImpact.h"
-#include "Combat/AnimNotifyState_HitWindow.h"
 #include "Characters/ArkhamCharacterBase.h"
 #include "Characters/EnemyCharacter.h"
 #include "AI/EnemySpawner.h"
@@ -24,36 +22,6 @@
 #include "NiagaraSystem.h"
 #include "Sound/SoundBase.h"
 
-namespace
-{
-    // Time from section start to the first hit window notify, in montage seconds
-    bool FindContactTime(const UAnimMontage* Montage, FName Section, float& OutContactTime)
-    {
-        float SectionStart = 0.f;
-        float SectionEnd = 0.f;
-        if (!StrikeAnalysis::GetSectionRange(Montage, Section, SectionStart, SectionEnd)) return false;
-
-        bool bFound = false;
-        OutContactTime = TNumericLimits<float>::Max();
-
-        for (const FAnimNotifyEvent& Event : Montage->Notifies)
-        {
-            const bool bIsHitNotify =
-                (Event.Notify && Event.Notify->IsA<UAnimNotify_EnableHitbox>()) ||
-                (Event.NotifyStateClass && Event.NotifyStateClass->IsA<UAnimNotifyState_HitWindow>());
-            if (!bIsHitNotify) continue;
-
-            const float TriggerTime = Event.GetTriggerTime();
-            if (TriggerTime < SectionStart || TriggerTime >= SectionEnd) continue;
-
-            OutContactTime = FMath::Min(OutContactTime, TriggerTime - SectionStart);
-            bFound = true;
-        }
-
-        return bFound;
-    }
-}
-
 UCombatComponent::UCombatComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -73,22 +41,19 @@ void UCombatComponent::BeginPlay()
     }
 
     // Analyze every attack up front so the first swing doesn't hitch
-    if (bAutoDetectStrike)
+    TArray<const TArray<TObjectPtr<UAttackData>>*> Lists = { &ComboAttacks, &FlashyAttacks };
+    for (const FComboChain& Chain : ExtraComboChains)
     {
-        TArray<const TArray<TObjectPtr<UAttackData>>*> Lists = { &ComboAttacks, &FlashyAttacks };
-        for (const FComboChain& Chain : ExtraComboChains)
-        {
-            Lists.Add(&Chain.Attacks);
-        }
+        Lists.Add(&Chain.Attacks);
+    }
 
-        for (const TArray<TObjectPtr<UAttackData>>* List : Lists)
+    for (const TArray<TObjectPtr<UAttackData>>* List : Lists)
+    {
+        for (const UAttackData* Attack : *List)
         {
-            for (const UAttackData* Attack : *List)
+            if (Attack && Attack->Montage)
             {
-                if (Attack && Attack->Montage)
-                {
-                    AnalyzeStrike(Attack->Montage, Attack->Section);
-                }
+                AnalyzeStrike(Attack->Montage, Attack->Section);
             }
         }
     }
@@ -152,19 +117,16 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType,
             UpdateApproach(DeltaTime);
         }
 
-        // Window timed around contact when notifies aren't driving it
-        if (!ActiveAttack.bHasHitNotifies)
+        // Hit window timed around the moment of contact
+        if (AttackPhase == EAttackPhase::Windup &&
+            ActiveAttack.Elapsed >= ActiveAttack.ContactTime - HitWindowLead)
         {
-            if (AttackPhase == EAttackPhase::Windup &&
-                ActiveAttack.Elapsed >= ActiveAttack.ContactTime - HitWindowLead)
-            {
-                OpenHitWindow();
-            }
-            else if (AttackPhase == EAttackPhase::Active &&
-                ActiveAttack.Elapsed >= ActiveAttack.ContactTime + DefaultActiveDuration)
-            {
-                CloseHitWindow();
-            }
+            OpenHitWindow();
+        }
+        else if (AttackPhase == EAttackPhase::Active &&
+            ActiveAttack.Elapsed >= ActiveAttack.ContactTime + DefaultActiveDuration)
+        {
+            CloseHitWindow();
         }
 
         if (AttackPhase == EAttackPhase::Active)
@@ -391,15 +353,14 @@ void UCombatComponent::StartAttack(bool bFlowOn)
             *NewAttack.Section.ToString(), *Montage->GetName(), *NewAttack.Data->GetName());
     }
 
-    // Contact timing and striking limb: read from the animation, else from EnableHitbox notifies
-    const FStrikeInfo Strike = bAutoDetectStrike ? AnalyzeStrike(Montage, NewAttack.Section) : FStrikeInfo();
+    // Contact timing and striking limb: read from the animation, else a default right-hand hit
+    const FStrikeInfo Strike = AnalyzeStrike(Montage, NewAttack.Section);
     NewAttack.Socket = TEXT("hand_r");
 
     if (Strike.bValid)
     {
         NewAttack.ContactTime = Strike.ContactTime;
         NewAttack.Socket = Strike.Bone;
-        NewAttack.bHasHitNotifies = false;
 
         // Stand where the limb at full extension lands just inside the target
         if (bAutoStrikeDistance && Target)
@@ -410,9 +371,7 @@ void UCombatComponent::StartAttack(bool bFlowOn)
     }
     else
     {
-        float ContactTime = DefaultContactTime;
-        NewAttack.bHasHitNotifies = FindContactTime(Montage, NewAttack.Section, ContactTime);
-        NewAttack.ContactTime = ContactTime;
+        NewAttack.ContactTime = DefaultContactTime;
     }
 
     if (!NewAttack.Data->HitSocketOverride.IsNone())
@@ -579,7 +538,7 @@ void UCombatComponent::CloseHitWindow()
 {
     if (AttackPhase != EAttackPhase::Active) return;
 
-    // Fallback for notify-driven windows that close before the contact frame
+    // The sweep missed the committed target - still land the hit so freeflow never whiffs
     ApplyGuaranteedHit(ActiveAttack.Target.Get());
 
     AttackPhase = EAttackPhase::Recovery;
@@ -645,7 +604,7 @@ void UCombatComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
     // Stale callback from an attack we already chained out of
     if (CombatState != ECombatState::Attacking || MontageInstanceID != ActiveAttack.MontageInstanceID) return;
 
-    // Montage ended without a DisableHitbox notify - close the window now (may chain a buffered attack)
+    // Montage ended while the hit window was still open - close it now (may chain a buffered attack)
     if (AttackPhase == EAttackPhase::Active)
     {
         CloseHitWindow();
@@ -659,31 +618,6 @@ void UCombatComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
     }
 
     FinishAttack();
-}
-
-bool UCombatComponent::IsCurrentAttackNotify(const UAnimSequenceBase* Animation, int32 MontageInstanceID) const
-{
-    // Auto-detected attacks time their own window around contact
-    if (CombatState != ECombatState::Attacking || !ActiveAttack.bHasHitNotifies) return false;
-
-    if (MontageInstanceID != INDEX_NONE)
-    {
-        return MontageInstanceID == ActiveAttack.MontageInstanceID;
-    }
-
-    return Animation == ActiveAttack.Montage;
-}
-
-void UCombatComponent::EnableHitbox(const UAnimSequenceBase* Animation, int32 MontageInstanceID)
-{
-    if (!IsCurrentAttackNotify(Animation, MontageInstanceID)) return;
-    OpenHitWindow();
-}
-
-void UCombatComponent::DisableHitbox(const UAnimSequenceBase* Animation, int32 MontageInstanceID)
-{
-    if (!IsCurrentAttackNotify(Animation, MontageInstanceID)) return;
-    CloseHitWindow();
 }
 
 // ---------------------------------------------------------------------------

@@ -125,7 +125,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | `AEnemySpawner` | `AI/EnemySpawner.*` | Placed in the level; spawns enemies at its spawn points, counts defeats, ends the encounter |
 | `UPlayerHUDWidget` | `UI/PlayerHUDWidget.*` | HUD logic: health bar + draining trail, driven by `OnHealthChanged`; the look is `WBP_PlayerHUD` |
 | `StrikeAnalysis` | `Combat/StrikeAnalysis.*` | Finds contact frame / striking limb / reach from animation bones |
-| Anim notifies | `Combat/AnimNotify_*`, `AnimNotifyState_HitWindow` | Legacy hit windows, death pose (the auto strike analysis now drives timing) |
+| Anim notifies | `Combat/AnimNotify_CounterImpact`, `AnimNotify_DeathEnd` | Counter damage frame (in `AM_PlayerCounter`) and end of the enemy death animation (in `AM_EnemyDeath`) |
 
 ---
 
@@ -146,7 +146,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 | Hit window, swept hit detection | `OpenHitWindow`, `CloseHitWindow`, `UpdateHitDetection` |
 | Guaranteed hit on the committed target at contact | `OnContact`, `ApplyGuaranteedHit` |
 | Applying damage, retargeting off staggered/dead enemies | `ApplyHit` |
-| Ignoring notifies from blending-out montages | `IsCurrentAttackNotify`, `OnAttackMontageEnded` |
+| Ignoring end callbacks from montages already chained out of | `OnAttackMontageEnded` |
 
 ### Impact / game feel (`Combat/CombatComponent.cpp`)
 | Feature | Function(s) |
@@ -217,7 +217,7 @@ StrikeAnalysis (shared) ── reads bone data from animations for both sides
 
 ## 3. How strike analysis works (`Combat/StrikeAnalysis.cpp`)
 
-Instead of trusting hand-placed notifies, every attack animation is sampled at 60 Hz:
+Hits aren't timed with hand-placed notifies. Instead, every attack animation is sampled at 60 Hz:
 
 1. For each candidate limb (`hand_r`, `hand_l`, `foot_r`, `foot_l`), compute its position in
    component space relative to the root, projected on the character's forward axis.

@@ -48,7 +48,7 @@ enum class ECombatState : uint8
 
 // Phases of a single attack.
 // Windup   - travelling/turning toward the target, input is buffered
-// Active   - hit window open (between EnableHitbox and DisableHitbox)
+// Active   - hit window open, timed around the contact frame read from the animation
 // Recovery - hit window closed, attack input chains immediately, movement cancels
 UENUM(BlueprintType)
 enum class EAttackPhase : uint8
@@ -66,7 +66,7 @@ enum class EAttackPhase : uint8
  *   1. Pick a target from the camera-relative stick direction (falls back to current target / facing)
  *   2. Pick an animation by distance: close -> next combo section, far -> transition kick
  *   3. Travel so the player arrives at strike distance exactly when the hit window opens
- *      (contact time is read from the EnableHitbox notify in the montage section)
+ *      (contact time is read from the animation by the strike analysis)
  *   4. During the hit window, sweep the attacking socket; if the committed target was
  *      somehow missed, it is still hit when the window closes (freeflow never whiffs)
  *   5. Presses during windup/active are buffered and fire when the window closes
@@ -105,10 +105,6 @@ public:
     bool IsEngaging(const AEnemyCharacter* Enemy) const;
 
     // --- Anim Notify Callbacks ---
-    // MontageInstanceID lets us ignore notifies from montages that are blending out
-    void EnableHitbox(const UAnimSequenceBase* Animation, int32 MontageInstanceID);
-    void DisableHitbox(const UAnimSequenceBase* Animation, int32 MontageInstanceID);
-
     // From the Counter Impact notify in the counter attack's montage
     void OnCounterImpact(const UAnimSequenceBase* Animation);
 
@@ -185,7 +181,7 @@ protected:
     float DirectionalTargetMinDot = 0.2f;
 
     // --- Movement ---
-    // Used when a montage section has no EnableHitbox notify to time the approach
+    // Used to time the approach when the strike analysis can't read an attack's contact frame
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Movement")
     float DefaultContactTime = 0.2f;
 
@@ -220,11 +216,7 @@ protected:
     FName WarpTargetName = TEXT("AttackTarget");
 
     // --- Strike Analysis ---
-    // Read the contact frame (striking limb at full extension) and which limb strikes from the animation itself,
-    // instead of trusting EnableHitbox notify placement
-    UPROPERTY(EditDefaultsOnly, Category = "Combat|Strike")
-    bool bAutoDetectStrike = true;
-
+    // The contact frame (striking limb at full extension) and which limb strikes are read from each attack's animation.
     // Candidate striking bones
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Strike")
     TArray<FName> StrikeBones;
@@ -391,7 +383,6 @@ private:
         float ContactTime = 0.f;
         float Elapsed = 0.f;
         float RecoveryElapsed = 0.f;
-        bool bHasHitNotifies = false;
         bool bUseWarp = false;
         bool bContactReached = false;
         bool bIsFinisher = false;
@@ -415,7 +406,6 @@ private:
     void CancelAttack();
     void ResetCombo();
     void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted, int32 MontageInstanceID);
-    bool IsCurrentAttackNotify(const UAnimSequenceBase* Animation, int32 MontageInstanceID) const;
 
     // --- Strike Analysis ---
     FStrikeInfo AnalyzeStrike(const UAnimMontage* Montage, FName Section);
