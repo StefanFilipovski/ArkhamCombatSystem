@@ -47,9 +47,6 @@ enum class ECombatState : uint8
 };
 
 // Phases of a single attack.
-// Windup   - travelling/turning toward the target, input is buffered
-// Active   - hit window open, timed around the contact frame read from the animation
-// Recovery - hit window closed, attack input chains immediately, movement cancels
 UENUM(BlueprintType)
 enum class EAttackPhase : uint8
 {
@@ -59,18 +56,7 @@ enum class EAttackPhase : uint8
     Recovery
 };
 
-/**
- * Freeflow-style melee combat.
- *
- * Flow per attack press:
- *   1. Pick a target from the camera-relative stick direction (falls back to current target / facing)
- *   2. Pick an animation by distance: close -> next combo section, far -> transition kick
- *   3. Travel so the player arrives at strike distance exactly when the hit window opens
- *      (contact time is read from the animation by the strike analysis)
- *   4. During the hit window, sweep the attacking socket; if the committed target was
- *      somehow missed, it is still hit when the window closes (freeflow never whiffs)
- *   5. Presses during windup/active are buffered and fire when the window closes
- */
+
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class ARKHAMCOMBAT_API UCombatComponent : public UActorComponent
 {
@@ -200,8 +186,7 @@ protected:
     bool bAllowMovementCancel = true;
 
     // Attacks whose animation travels at least MinWarpRootTravel before contact keep their root motion,
-    // warped by the MotionWarping component to land on the target. Others use the code-driven approach.
-    // Warp windows are added from code - no montage setup needed.
+    // warped by the MotionWarping component to land on the target
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Movement")
     bool bUseMotionWarping = true;
 
